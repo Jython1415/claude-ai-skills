@@ -79,9 +79,12 @@ See `examples/claude_self_improvement.py`
 - git installed on server machine
 
 ## Deployment Options
-1. **ngrok**: Easiest, free tier has changing URLs
-2. **Custom domain**: nginx + SSL + DNS A record
-3. **VPS**: Deploy as systemd service
+1. **Tailscale Funnel** (Current): Free stable URLs, auto-start on boot, zero maintenance
+   - URL: `https://<machine>.<tailnet>.ts.net:8443`
+   - Setup: `tailscale funnel --bg 8443`
+   - Auto-restarts: On reboot, WiFi change, Tailscale restart
+2. **VPS**: Deploy as systemd service (always-on option)
+3. **Custom domain**: nginx + SSL + DNS A record (advanced)
 
 ## ToS Compliance
 Compliant with Anthropic Usage Policy - equivalent to VPN/ngrok/SSH tunneling for legitimate development.
