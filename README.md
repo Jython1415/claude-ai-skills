@@ -6,12 +6,13 @@ Proxy enabling Claude.ai Projects to execute git operations through Tailscale Fu
 
 **Best for Claude.ai Projects** - Keeps code out of context, works across all projects.
 
-See **[docs/SKILL_SETUP.md](docs/SKILL_SETUP.md)** for complete setup guide.
-
 **Quick start:**
-1. Install skill from `skill-package/git-proxy-skill.zip`
-2. Upload `.env` to each project
-3. Add domain to project allowed list
+1. Build skill: `./scripts/build_skill.sh`
+2. Upload `skill-package/git-proxy-skill.zip` to Claude.ai Settings → Skills
+3. Upload `.env` to each project
+4. Add domain to project allowed list
+
+See [skill-package/README.md](skill-package/README.md) for details.
 
 ## Alternative: Direct Integration
 
@@ -87,7 +88,6 @@ launchctl load ~/Library/LaunchAgents/com.joshuashew.gitproxy.plist
 
 ## Docs
 
-- **[docs/SKILL_SETUP.md](docs/SKILL_SETUP.md)** - **Recommended setup using skills** ⭐
 - [CLAUDE.md](CLAUDE.md) - Technical reference
 - [docs/TAILSCALE_SETUP.md](docs/TAILSCALE_SETUP.md) - Detailed Tailscale setup
 - [docs/CLAUDE_AI_TESTING.md](docs/CLAUDE_AI_TESTING.md) - Testing from Claude.ai

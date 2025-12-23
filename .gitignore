@@ -54,6 +54,9 @@ logs/
 # Git proxy workspace
 git-proxy-workspace/
 
+# Skill package (build artifact)
+skill-package/git-proxy-skill.zip
+
 # Temporary files
 _temp_*
 tmp/
