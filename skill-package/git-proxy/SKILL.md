@@ -1,7 +1,6 @@
 ---
-name: Git Proxy
+name: git-proxy
 description: Execute git operations through a secure proxy server. Use when you need to clone, commit, push, pull, or manage git repositories from Claude.ai Projects.
-dependencies: python>=3.7, requests>=2.31.0
 ---
 
 # Git Proxy Skill
@@ -19,13 +18,59 @@ GIT_PROXY_KEY=your-secret-authentication-key
 
 ## Quick Start
 
+### Bundle Workflow (Recommended for Claude.ai)
+
+Clone repos into Claude's environment using git bundles:
+
+```python
+from git_client import GitProxyClient
+import subprocess
+
+# Initialize client
+client = GitProxyClient()
+
+# 1. Fetch repository as bundle
+client.fetch_bundle('https://github.com/user/repo.git', 'repo.bundle')
+
+# 2. Clone bundle locally in Claude's environment
+subprocess.run(['git', 'clone', 'repo.bundle', 'repo/'])
+subprocess.run(['git', 'remote', 'set-url', 'origin', 'https://github.com/user/repo.git'], cwd='repo/')
+
+# 3. Edit files using normal file operations
+with open('repo/README.md', 'a') as f:
+    f.write('\nImprovement from Claude\n')
+
+# 4. Commit changes
+subprocess.run(['git', 'add', '.'], cwd='repo/')
+subprocess.run(['git', 'commit', '-m', 'Improvements from Claude'], cwd='repo/')
+
+# 5. Create feature branch and bundle changes
+subprocess.run(['git', 'checkout', '-b', 'feature/claude-improvements'], cwd='repo/')
+subprocess.run(['git', 'bundle', 'create', 'changes.bundle', 'main..HEAD'], cwd='repo/')
+
+# 6. Push bundle and create PR
+result = client.push_bundle(
+    'changes.bundle',
+    'https://github.com/user/repo.git',
+    'feature/claude-improvements',
+    create_pr=True,
+    pr_title='Improvements from Claude',
+    pr_body='Automated improvements'
+)
+print(f"PR created: {result.get('pr_url')}")
+```
+
+### Direct Proxy Workflow (Legacy)
+
+Execute git commands on proxy server (files stay on your Mac):
+
 ```python
 from git_client import GitProxyClient
 
 # Initialize client (reads from .env automatically)
 client = GitProxyClient()
 
-# Clone a repository
+# Clone a repository (on proxy server)
 repo_path = client.clone('https://github.com/username/repo.git')
 
 # Check status
@@ -80,8 +125,13 @@ log = client.log(repo, n=10)
 
 ### GitProxyClient Methods
 
+#### Bundle Operations (Recommended)
+- `fetch_bundle(repo_url, output_path, branch='main')` - Fetch repository as bundle for local cloning
+- `push_bundle(bundle_path, repo_url, branch, create_pr=False, pr_title='', pr_body='')` - Push bundled changes and optionally create PR
+
+#### Direct Proxy Operations (Legacy)
 - `health_check()` - Verify proxy server is reachable
-- `clone(repo_url, local_path=None)` - Clone a repository
+- `clone(repo_url, local_path=None)` - Clone a repository on proxy server
 - `status(repo_path, short=True)` - Get repository status
 - `add(repo_path, files="-A")` - Stage files
 - `commit(repo_path, message, files=None)` - Commit changes
@@ -91,6 +141,7 @@ log = client.log(repo, n=10)
 - `branch(repo_path, branch_name=None, checkout=False)` - Manage branches
 - `checkout(repo_path, branch)` - Switch branches
 - `list_workspace()` - List all repositories in workspace
+- `gh(command, repo_path=None)` - Execute GitHub CLI commands
 
 ## Troubleshooting
 
