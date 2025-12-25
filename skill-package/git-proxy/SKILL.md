@@ -18,8 +18,6 @@ GIT_PROXY_KEY=your-secret-authentication-key
 
 ## Quick Start
 
-### Bundle Workflow (Recommended for Claude.ai)
-
 Clone repos into Claude's environment using git bundles:
 
 ```python
@@ -60,88 +58,13 @@ result = client.push_bundle(
 print(f"PR created: {result.get('pr_url')}")
 ```
 
-### Direct Proxy Workflow (Legacy)
-
-Execute git commands on proxy server (files stay on your Mac):
-
-```python
-from git_client import GitProxyClient
-
-# Initialize client (reads from .env automatically)
-client = GitProxyClient()
-
-# Clone a repository (on proxy server)
-repo_path = client.clone('https://github.com/username/repo.git')
-
-# Check status
-status = client.status(repo_path)
-print(status)
-
-# Make changes, then commit
-client.commit(repo_path, "Your commit message here")
-
-# Push to remote
-client.push(repo_path, branch='main')
-```
-
-## Common Operations
-
-### Clone Repository
-```python
-repo = client.clone('https://github.com/user/repo.git')
-```
-
-### Check Status
-```python
-status = client.status(repo)
-```
-
-### Create Branch
-```python
-client.branch(repo, 'feature-branch', checkout=True)
-```
-
-### Commit Changes
-```python
-client.commit(repo, "Describe your changes")
-```
-
-### Push to Remote
-```python
-client.push(repo, branch='main')
-```
-
-### Pull Latest
-```python
-client.pull(repo)
-```
-
-### View History
-```python
-log = client.log(repo, n=10)
-```
-
 ## API Reference
 
 ### GitProxyClient Methods
 
-#### Bundle Operations (Recommended)
+- `health_check()` - Verify proxy server is reachable
 - `fetch_bundle(repo_url, output_path, branch='main')` - Fetch repository as bundle for local cloning
 - `push_bundle(bundle_path, repo_url, branch, create_pr=False, pr_title='', pr_body='')` - Push bundled changes and optionally create PR
-
-#### Direct Proxy Operations (Legacy)
-- `health_check()` - Verify proxy server is reachable
-- `clone(repo_url, local_path=None)` - Clone a repository on proxy server
-- `status(repo_path, short=True)` - Get repository status
-- `add(repo_path, files="-A")` - Stage files
-- `commit(repo_path, message, files=None)` - Commit changes
-- `push(repo_path, branch='main', remote='origin')` - Push to remote
-- `pull(repo_path, branch='main', remote='origin')` - Pull from remote
-- `log(repo_path, n=10, oneline=True)` - View commit history
-- `branch(repo_path, branch_name=None, checkout=False)` - Manage branches
-- `checkout(repo_path, branch)` - Switch branches
-- `list_workspace()` - List all repositories in workspace
-- `gh(command, repo_path=None)` - Execute GitHub CLI commands
 
 ## Troubleshooting
 
@@ -155,14 +78,15 @@ log = client.log(repo, n=10)
 - Verify `GIT_PROXY_KEY` matches the secret key on your proxy server
 - Check server logs for authentication attempts
 
-### Command Failures
-- All commands must start with `git ` (enforced by proxy for security)
-- Ensure you're in a valid git repository path
+### Bundle Failures
+- Ensure bundle files are valid git bundles
+- Check bundle with: `git bundle verify bundle.file`
 - Check server logs: `tail -f ~/Library/Logs/gitproxy.log`
 
 ## Security Notes
 
-- All git commands are executed through an authenticated proxy
-- The proxy server validates all commands before execution
-- Commands are restricted to workspace directory only
+- All operations require authentication via secret key
+- Files are processed in temporary directories with automatic cleanup
+- No persistent storage on proxy server (pure pass-through)
 - Full audit trail maintained in server logs
+- PR creation uses your local git credentials and gh CLI configuration
