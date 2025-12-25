@@ -149,7 +149,35 @@ def load_env_from_file(env_file: str = '/mnt/project/_env') -> None:
                 os.environ[key] = value
 
 
-def clone_repo(repo_url: str, target_dir: str, branch: str = 'main') -> str:
+def setup_git_user(repo_dir: str, email: str = 'claude@anthropic.com', name: str = 'Claude') -> None:
+    """
+    Configure git user identity for commits
+
+    Args:
+        repo_dir: Repository directory
+        email: Git user email (default: claude@anthropic.com)
+        name: Git user name (default: Claude)
+
+    Example:
+        clone_repo('https://github.com/user/repo.git', '/tmp/repo')
+        setup_git_user('/tmp/repo')  # Configure git identity
+    """
+    subprocess.run(
+        ['git', 'config', 'user.email', email],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True
+    )
+    subprocess.run(
+        ['git', 'config', 'user.name', name],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True
+    )
+
+
+def clone_repo(repo_url: str, target_dir: str, branch: str = 'main',
+               setup_user: bool = True) -> str:
     """
     One-step clone: fetch bundle and clone into directory
 
@@ -160,6 +188,7 @@ def clone_repo(repo_url: str, target_dir: str, branch: str = 'main') -> str:
         repo_url: GitHub repository URL
         target_dir: Directory to clone into (will be created)
         branch: Branch to clone (default: main)
+        setup_user: Automatically configure git user (default: True)
 
     Returns:
         Path to cloned repository
@@ -167,7 +196,7 @@ def clone_repo(repo_url: str, target_dir: str, branch: str = 'main') -> str:
     Example:
         load_env_from_file()
         clone_repo('https://github.com/user/repo.git', '/tmp/myrepo')
-        # Repository is now cloned at /tmp/myrepo
+        # Repository is now cloned at /tmp/myrepo with git user configured
     """
     client = GitProxyClient()
 
@@ -193,6 +222,10 @@ def clone_repo(repo_url: str, target_dir: str, branch: str = 'main') -> str:
         text=True,
         check=True
     )
+
+    # Setup git user if requested
+    if setup_user:
+        setup_git_user(target_dir)
 
     # Clean up bundle file
     os.unlink(bundle_path)

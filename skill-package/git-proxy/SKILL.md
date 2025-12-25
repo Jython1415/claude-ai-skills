@@ -41,6 +41,13 @@ with open('/mnt/project/_env', 'r') as f:
             os.environ[key] = value
 ```
 
+**PR Creation:**
+- Automatic PR creation (`create_pr=True`) uses GitHub CLI (`gh`) on your proxy server
+- Server auto-detects `gh` at startup (checks `/opt/homebrew/bin/gh` and `/usr/local/bin/gh`)
+- If `gh` is available, PRs are created automatically
+- If `gh` not found, server provides manual PR URL in response
+- Check server logs on startup to verify `gh` was detected
+
 ## Quick Start (Easy Mode)
 
 **Using convenience functions for simplest workflow:**
@@ -64,9 +71,12 @@ with open('/tmp/repo/README.md', 'a') as f:
 subprocess.run(['git', 'add', '.'], cwd='/tmp/repo', check=True)
 subprocess.run(['git', 'commit', '-m', 'Improvements'], cwd='/tmp/repo', check=True)
 
-# Create feature branch and bundle
+# Create feature branch and bundle (use explicit branch name!)
 subprocess.run(['git', 'checkout', '-b', 'feature/claude-improvements'], cwd='/tmp/repo', check=True)
-subprocess.run(['git', 'bundle', 'create', '/tmp/changes.bundle', 'origin/main..HEAD'], cwd='/tmp/repo', check=True)
+subprocess.run([
+    'git', 'bundle', 'create', '/tmp/changes.bundle',
+    'origin/main..feature/claude-improvements'  # Not HEAD!
+], cwd='/tmp/repo', check=True)
 
 # Push and create PR
 client = GitProxyClient()
@@ -130,9 +140,10 @@ subprocess.run([
     'git', 'checkout', '-b', 'feature/claude-improvements'
 ], cwd='/tmp/repo', check=True)
 
-# STEP 10: Create bundle of changes (origin/main..HEAD means commits after main)
+# STEP 10: Create bundle of changes (use explicit branch name, not HEAD)
 subprocess.run([
-    'git', 'bundle', 'create', '/tmp/changes.bundle', 'origin/main..HEAD'
+    'git', 'bundle', 'create', '/tmp/changes.bundle',
+    'origin/main..feature/claude-improvements'  # Use branch name, not HEAD!
 ], cwd='/tmp/repo', check=True)
 
 # STEP 11: Push bundle and create PR
@@ -153,7 +164,8 @@ print(f"✓ PR created: {result['pr_url']}")
 ### Convenience Functions (Recommended)
 
 - `load_env_from_file(env_file='/mnt/project/_env')` - Load environment variables from file
-- `clone_repo(repo_url, target_dir, branch='main')` - One-step clone: fetch bundle + git clone + set remote
+- `clone_repo(repo_url, target_dir, branch='main', setup_user=True)` - One-step clone: fetch bundle + git clone + set remote + configure git user
+- `setup_git_user(repo_dir, email='claude@anthropic.com', name='Claude')` - Configure git user identity for commits
 
 ### GitProxyClient Methods
 
@@ -217,9 +229,32 @@ client = GitProxyClient()  # ✅ Works - env vars loaded
 - Use `fetch_bundle()` and `push_bundle()` methods, not custom API calls
 
 ### Bundle Failures
-- Ensure bundle files are valid git bundles
+- **CRITICAL**: Always use explicit branch refs when creating bundles for push:
+  - ❌ Wrong: `git bundle create bundle.file origin/main..HEAD`
+  - ✅ Correct: `git bundle create bundle.file origin/main..feature-branch`
+- If you get "Couldn't find remote ref" error, recreate bundle with explicit branch name
 - Verify bundle with: `git bundle verify bundle.file`
-- When creating bundles, use `origin/main..HEAD` not `main..HEAD`
+- When creating bundles for local use only, `origin/main..HEAD` is fine
+
+### Git Configuration
+- Set git user identity before committing:
+  ```bash
+  git config user.email "claude@anthropic.com"
+  git config user.name "Claude"
+  ```
+- Or use global config if available
+
+### Import Errors
+If `from git_client import ...` fails, ensure git_client.py is accessible:
+```python
+# Option 1: Copy to project directory
+import subprocess
+subprocess.run(['cp', '/mnt/skills/user/git-proxy/git_client.py', '/mnt/project/'])
+
+# Option 2: Add to Python path
+import sys
+sys.path.insert(0, '/mnt/skills/user/git-proxy')
+```
 
 ## Security Notes
 

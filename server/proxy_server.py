@@ -11,6 +11,7 @@ import os
 import logging
 from datetime import datetime
 import tempfile
+import shutil
 
 # Load .env file if it exists
 try:
@@ -33,6 +34,20 @@ SECRET_KEY = os.environ.get('PROXY_SECRET_KEY')
 if not SECRET_KEY:
     logger.warning("PROXY_SECRET_KEY not set! Using insecure default.")
     SECRET_KEY = 'CHANGE-ME-INSECURE'
+
+# Detect gh CLI at startup
+GH_PATH = shutil.which('gh')
+if not GH_PATH:
+    # Try common Homebrew locations
+    for path in ['/opt/homebrew/bin/gh', '/usr/local/bin/gh']:
+        if os.path.exists(path) and os.access(path, os.X_OK):
+            GH_PATH = path
+            break
+
+if GH_PATH:
+    logger.info(f"GitHub CLI found at: {GH_PATH}")
+else:
+    logger.warning("GitHub CLI (gh) not found - PR creation will fail")
 
 
 def verify_auth(auth_header):
@@ -237,30 +252,55 @@ def push_bundle():
 
             # Create PR if requested
             if create_pr:
-                logger.info(f"Creating PR for {branch}")
-
-                if not pr_title:
-                    pr_title = f"Changes from {branch}"
-
-                gh_cmd = ['gh', 'pr', 'create', '--title', pr_title, '--body', pr_body or 'Automated PR from Claude', '--head', branch]
-
-                result = subprocess.run(
-                    gh_cmd,
-                    cwd=repo_path,
-                    capture_output=True,
-                    timeout=60,
-                    text=True
-                )
-
-                if result.returncode == 0:
-                    pr_url = result.stdout.strip()
-                    response['pr_created'] = True
-                    response['pr_url'] = pr_url
-                    logger.info(f"PR created: {pr_url}")
-                else:
-                    logger.warning(f"PR creation failed: {result.stderr}")
+                if not GH_PATH:
+                    # gh CLI not available - provide manual URL
+                    logger.warning("PR creation requested but gh CLI not available")
                     response['pr_created'] = False
-                    response['pr_error'] = result.stderr
+                    try:
+                        repo_parts = repo_url.rstrip('/').replace('.git', '').split('/')
+                        owner = repo_parts[-2]
+                        repo = repo_parts[-1]
+                        manual_url = f"https://github.com/{owner}/{repo}/pull/new/{branch}"
+                        response['manual_pr_url'] = manual_url
+                        response['pr_message'] = f"GitHub CLI not available on server. Create PR manually at: {manual_url}"
+                    except:
+                        response['pr_message'] = "GitHub CLI not available. Create PR manually on GitHub."
+                else:
+                    logger.info(f"Creating PR for {branch} using {GH_PATH}")
+
+                    if not pr_title:
+                        pr_title = f"Changes from {branch}"
+
+                    gh_cmd = [GH_PATH, 'pr', 'create', '--title', pr_title, '--body', pr_body or 'Automated PR from Claude', '--head', branch]
+
+                    result = subprocess.run(
+                        gh_cmd,
+                        cwd=repo_path,
+                        capture_output=True,
+                        timeout=60,
+                        text=True
+                    )
+
+                    if result.returncode == 0:
+                        pr_url = result.stdout.strip()
+                        response['pr_created'] = True
+                        response['pr_url'] = pr_url
+                        logger.info(f"PR created: {pr_url}")
+                    else:
+                        logger.warning(f"PR creation failed: {result.stderr}")
+                        response['pr_created'] = False
+                        response['pr_error'] = result.stderr
+
+                        # Provide manual PR URL as fallback
+                        try:
+                            repo_parts = repo_url.rstrip('/').replace('.git', '').split('/')
+                            owner = repo_parts[-2]
+                            repo = repo_parts[-1]
+                            manual_url = f"https://github.com/{owner}/{repo}/pull/new/{branch}"
+                            response['manual_pr_url'] = manual_url
+                            response['pr_message'] = f"PR creation failed. Create manually at: {manual_url}"
+                        except:
+                            pass
 
             logger.info(f"Push complete, temp repo cleaned up")
             return jsonify(response)
