@@ -31,12 +31,15 @@ tailscale funnel status
 
 ### 2. Install Skill in Claude.ai
 
-```bash
-# Build skill package
-./scripts/build_skill.sh
+**Option A: Download from GitHub Releases**
+1. Go to [Releases](../../releases)
+2. Download `git-proxy-skill.zip` from the latest release
+3. Upload to claude.ai → Settings → Skills
 
-# Upload skill-package/git-proxy-skill.zip to:
-# claude.ai → Settings → Skills
+**Option B: Build from source**
+```bash
+./scripts/build_skill.sh
+# Upload skill-package/git-proxy-skill.zip to claude.ai → Settings → Skills
 ```
 
 ### 3. Configure Each Project
@@ -94,6 +97,22 @@ launchctl load ~/Library/LaunchAgents/com.joshuashew.gitproxy.plist
 # Remove auto-start
 ./scripts/uninstall_launchagent.sh
 ```
+
+## Releases
+
+Skill packages are automatically built and released to GitHub:
+
+**Automatic Release** (when VERSION file changes):
+1. Edit `skill-package/git-proxy/VERSION` (e.g., change to `1.0.1`)
+2. Commit and push to main
+3. GitHub Actions automatically creates a release with the skill ZIP
+
+**Manual Release**:
+1. Go to Actions → Release Skill → Run workflow
+2. Optionally specify a version to override the VERSION file
+3. Release is created with the skill ZIP attached
+
+Download releases at: [github.com/Jython1415/claude-git-bridge/releases](https://github.com/Jython1415/claude-git-bridge/releases)
 
 ## Documentation
 

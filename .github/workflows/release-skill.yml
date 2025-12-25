@@ -1,0 +1,36 @@
+name: Release Skill
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'skill-package/git-proxy/VERSION'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0) - overrides VERSION file'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changelog
+
+      - name: Build and release skill
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          VERSION_OVERRIDE: ${{ github.event.inputs.version }}
+        run: |
+          chmod +x .github/scripts/release-skill.sh
+          .github/scripts/release-skill.sh
