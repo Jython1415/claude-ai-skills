@@ -6,6 +6,7 @@ Communicates with git bundle proxy server for temporary git operations
 
 import requests
 import os
+import subprocess
 from typing import Optional
 
 class GitProxyClient:
@@ -124,3 +125,76 @@ def get_client() -> GitProxyClient:
     if _client is None:
         _client = GitProxyClient()
     return _client
+
+
+def load_env_from_file(env_file: str = '/mnt/project/_env') -> None:
+    """
+    Load environment variables from file
+
+    Args:
+        env_file: Path to environment file (default: /mnt/project/_env for Claude.ai Projects)
+
+    Example:
+        load_env_from_file()  # Load from default location
+        client = GitProxyClient()  # Now has access to GIT_PROXY_URL and GIT_PROXY_KEY
+    """
+    if not os.path.exists(env_file):
+        raise FileNotFoundError(f"Environment file not found: {env_file}")
+
+    with open(env_file, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line and '=' in line and not line.startswith('#'):
+                key, value = line.split('=', 1)
+                os.environ[key] = value
+
+
+def clone_repo(repo_url: str, target_dir: str, branch: str = 'main') -> str:
+    """
+    One-step clone: fetch bundle and clone into directory
+
+    This is a convenience wrapper that combines fetch_bundle + git clone.
+    Requires environment variables to be loaded first (use load_env_from_file()).
+
+    Args:
+        repo_url: GitHub repository URL
+        target_dir: Directory to clone into (will be created)
+        branch: Branch to clone (default: main)
+
+    Returns:
+        Path to cloned repository
+
+    Example:
+        load_env_from_file()
+        clone_repo('https://github.com/user/repo.git', '/tmp/myrepo')
+        # Repository is now cloned at /tmp/myrepo
+    """
+    client = GitProxyClient()
+
+    # Create bundle file
+    bundle_path = f"{target_dir}.bundle"
+
+    # Fetch bundle
+    client.fetch_bundle(repo_url, bundle_path, branch)
+
+    # Clone from bundle
+    result = subprocess.run(
+        ['git', 'clone', bundle_path, target_dir],
+        capture_output=True,
+        text=True,
+        check=True
+    )
+
+    # Set remote URL
+    subprocess.run(
+        ['git', 'remote', 'set-url', 'origin', repo_url],
+        cwd=target_dir,
+        capture_output=True,
+        text=True,
+        check=True
+    )
+
+    # Clean up bundle file
+    os.unlink(bundle_path)
+
+    return target_dir

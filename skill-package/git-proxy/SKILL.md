@@ -1,64 +1,159 @@
 ---
 name: git-proxy
-description: Execute git operations through a secure proxy server. Use when you need to clone, commit, push, pull, or manage git repositories from Claude.ai Projects.
+description: Clone GitHub repositories into Claude.ai Projects using git bundles via proxy server. Use when you need to work with git repositories from Claude.ai.
 ---
 
 # Git Proxy Skill
 
-Execute git operations (clone, commit, push, pull, branch management) through a secure HTTPS proxy server.
+Clone and push to GitHub repositories from Claude.ai Projects using git bundles and a proxy server.
+
+## IMPORTANT: Available Methods
+
+The `GitProxyClient` class has **only 3 methods**:
+- ✅ `health_check()` - Test connection
+- ✅ `fetch_bundle(repo_url, output_path, branch='main')` - Download repo as bundle
+- ✅ `push_bundle(bundle_path, repo_url, branch, ...)` - Upload and push changes
+
+**Methods that DO NOT exist:**
+- ❌ NO `clone()` method - use `fetch_bundle()` then `git clone`
+- ❌ NO `push()` method - use `push_bundle()` with a bundle file
+- ❌ NO `pull()` method - use `fetch_bundle()` to get updates
 
 ## Prerequisites
 
-This skill requires a `.env` file in your project with:
+**Environment file location in Claude.ai Projects:** `/mnt/project/_env`
 
+The file should contain:
 ```
 GIT_PROXY_URL=https://your-machine.your-tailnet.ts.net
 GIT_PROXY_KEY=your-secret-authentication-key
 ```
 
-## Quick Start
+**Load environment variables before using the client:**
+```python
+import os
 
-Clone repos into Claude's environment using git bundles:
+# REQUIRED: Load environment variables from _env file
+with open('/mnt/project/_env', 'r') as f:
+    for line in f:
+        if '=' in line:
+            key, value = line.strip().split('=', 1)
+            os.environ[key] = value
+```
+
+## Quick Start (Easy Mode)
+
+**Using convenience functions for simplest workflow:**
 
 ```python
-from git_client import GitProxyClient
+import sys
+sys.path.insert(0, '/mnt/project')
+from git_client import load_env_from_file, clone_repo, GitProxyClient
 import subprocess
 
-# Initialize client
-client = GitProxyClient()
+# Load environment variables automatically
+load_env_from_file()  # Loads from /mnt/project/_env
 
-# 1. Fetch repository as bundle
-client.fetch_bundle('https://github.com/user/repo.git', 'repo.bundle')
+# Clone repo in one step
+clone_repo('https://github.com/user/repo.git', '/tmp/repo')
 
-# 2. Clone bundle locally in Claude's environment
-subprocess.run(['git', 'clone', 'repo.bundle', 'repo/'])
-subprocess.run(['git', 'remote', 'set-url', 'origin', 'https://github.com/user/repo.git'], cwd='repo/')
-
-# 3. Edit files using normal file operations
-with open('repo/README.md', 'a') as f:
+# Make changes and commit
+with open('/tmp/repo/README.md', 'a') as f:
     f.write('\nImprovement from Claude\n')
 
-# 4. Commit changes
-subprocess.run(['git', 'add', '.'], cwd='repo/')
-subprocess.run(['git', 'commit', '-m', 'Improvements from Claude'], cwd='repo/')
+subprocess.run(['git', 'add', '.'], cwd='/tmp/repo', check=True)
+subprocess.run(['git', 'commit', '-m', 'Improvements'], cwd='/tmp/repo', check=True)
 
-# 5. Create feature branch and bundle changes
-subprocess.run(['git', 'checkout', '-b', 'feature/claude-improvements'], cwd='repo/')
-subprocess.run(['git', 'bundle', 'create', 'changes.bundle', 'main..HEAD'], cwd='repo/')
+# Create feature branch and bundle
+subprocess.run(['git', 'checkout', '-b', 'feature/claude-improvements'], cwd='/tmp/repo', check=True)
+subprocess.run(['git', 'bundle', 'create', '/tmp/changes.bundle', 'origin/main..HEAD'], cwd='/tmp/repo', check=True)
 
-# 6. Push bundle and create PR
+# Push and create PR
+client = GitProxyClient()
 result = client.push_bundle(
-    'changes.bundle',
+    '/tmp/changes.bundle',
+    'https://github.com/user/repo.git',
+    'feature/claude-improvements',
+    create_pr=True,
+    pr_title='Improvements from Claude'
+)
+print(f"✓ PR created: {result['pr_url']}")
+```
+
+## Complete Workflow Example (Manual Steps)
+
+**Step-by-step workflow showing all operations explicitly:**
+
+```python
+import sys
+import subprocess
+
+# STEP 1: Add git_client to Python path
+sys.path.insert(0, '/mnt/project')
+from git_client import load_env_from_file, GitProxyClient
+
+# STEP 2: Load environment variables (REQUIRED!)
+load_env_from_file()  # Loads from /mnt/project/_env
+
+# STEP 3: Initialize client (uses env vars)
+client = GitProxyClient()
+
+# STEP 4: Verify connection
+health = client.health_check()
+print(f"Proxy status: {health['status']}")
+
+# STEP 5: Fetch repository as bundle
+# NOTE: There is NO clone() method on GitProxyClient - use fetch_bundle() instead!
+client.fetch_bundle(
+    'https://github.com/user/repo.git',
+    '/tmp/repo.bundle'
+)
+
+# STEP 6: Clone bundle to create working directory
+subprocess.run(['git', 'clone', '/tmp/repo.bundle', '/tmp/repo'], check=True)
+
+# STEP 7: Set remote URL (bundles don't have remotes)
+subprocess.run([
+    'git', 'remote', 'set-url', 'origin',
+    'https://github.com/user/repo.git'
+], cwd='/tmp/repo', check=True)
+
+# STEP 8: Make changes and commit
+with open('/tmp/repo/README.md', 'a') as f:
+    f.write('\nImprovement from Claude\n')
+
+subprocess.run(['git', 'add', '.'], cwd='/tmp/repo', check=True)
+subprocess.run(['git', 'commit', '-m', 'Improvements'], cwd='/tmp/repo', check=True)
+
+# STEP 9: Create feature branch
+subprocess.run([
+    'git', 'checkout', '-b', 'feature/claude-improvements'
+], cwd='/tmp/repo', check=True)
+
+# STEP 10: Create bundle of changes (origin/main..HEAD means commits after main)
+subprocess.run([
+    'git', 'bundle', 'create', '/tmp/changes.bundle', 'origin/main..HEAD'
+], cwd='/tmp/repo', check=True)
+
+# STEP 11: Push bundle and create PR
+result = client.push_bundle(
+    '/tmp/changes.bundle',
     'https://github.com/user/repo.git',
     'feature/claude-improvements',
     create_pr=True,
     pr_title='Improvements from Claude',
-    pr_body='Automated improvements'
+    pr_body='Automated improvements from Claude.ai'
 )
-print(f"PR created: {result.get('pr_url')}")
+
+print(f"✓ PR created: {result['pr_url']}")
 ```
 
 ## API Reference
+
+### Convenience Functions (Recommended)
+
+- `load_env_from_file(env_file='/mnt/project/_env')` - Load environment variables from file
+- `clone_repo(repo_url, target_dir, branch='main')` - One-step clone: fetch bundle + git clone + set remote
 
 ### GitProxyClient Methods
 
@@ -66,22 +161,65 @@ print(f"PR created: {result.get('pr_url')}")
 - `fetch_bundle(repo_url, output_path, branch='main')` - Fetch repository as bundle for local cloning
 - `push_bundle(bundle_path, repo_url, branch, create_pr=False, pr_title='', pr_body='')` - Push bundled changes and optionally create PR
 
+## Common Mistakes to Avoid
+
+### ❌ Wrong: Trying to call clone() on GitProxyClient
+```python
+client = GitProxyClient()
+client.clone('https://github.com/user/repo.git')  # ❌ NO clone() method on GitProxyClient!
+```
+
+### ✅ Correct Option 1: Use convenience function
+```python
+from git_client import load_env_from_file, clone_repo
+load_env_from_file()
+clone_repo('https://github.com/user/repo.git', '/tmp/repo')  # ✅ One-step clone
+```
+
+### ✅ Correct Option 2: Use fetch_bundle() then git clone
+```python
+client = GitProxyClient()
+client.fetch_bundle('https://github.com/user/repo.git', '/tmp/repo.bundle')
+subprocess.run(['git', 'clone', '/tmp/repo.bundle', '/tmp/repo'], check=True)
+subprocess.run(['git', 'remote', 'set-url', 'origin', 'https://github.com/user/repo.git'], cwd='/tmp/repo', check=True)
+```
+
+### ❌ Wrong: Forgetting to load environment variables
+```python
+from git_client import GitProxyClient
+client = GitProxyClient()  # ❌ Raises ValueError - env vars not loaded!
+```
+
+### ✅ Correct: Load env vars using helper function
+```python
+from git_client import load_env_from_file, GitProxyClient
+load_env_from_file()  # ✅ Loads from /mnt/project/_env
+client = GitProxyClient()  # ✅ Works - env vars loaded
+```
+
 ## Troubleshooting
 
 ### Connection Errors
-- Verify `.env` file exists in project
-- Check `GIT_PROXY_URL` and `GIT_PROXY_KEY` are set correctly
+- Verify `/mnt/project/_env` file exists (use `ls /mnt/project/_env`)
+- Check `GIT_PROXY_URL` and `GIT_PROXY_KEY` are set correctly in _env file
+- Test with `client.health_check()` - should return `{"status": "healthy"}`
 - Ensure proxy server is running on your local machine
 - Confirm domain is in Claude.ai allowed domains list
 
-### Authentication Failures
-- Verify `GIT_PROXY_KEY` matches the secret key on your proxy server
+### Authentication Failures (401 errors)
+- Verify `GIT_PROXY_KEY` in `/mnt/project/_env` matches server's `PROXY_SECRET_KEY`
+- Ensure you loaded env vars before creating client
 - Check server logs for authentication attempts
+
+### 404 Errors
+- Only 3 endpoints exist: `/health`, `/git/fetch-bundle`, `/git/push-bundle`
+- DO NOT try `/clone`, `/git-exec`, `/bundle` - these don't exist
+- Use `fetch_bundle()` and `push_bundle()` methods, not custom API calls
 
 ### Bundle Failures
 - Ensure bundle files are valid git bundles
-- Check bundle with: `git bundle verify bundle.file`
-- Check server logs: `tail -f ~/Library/Logs/gitproxy.log`
+- Verify bundle with: `git bundle verify bundle.file`
+- When creating bundles, use `origin/main..HEAD` not `main..HEAD`
 
 ## Security Notes
 
