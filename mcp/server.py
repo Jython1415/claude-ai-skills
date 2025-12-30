@@ -4,14 +4,70 @@ MCP Server for Credential Proxy Session Management
 
 Exposes session management as MCP tools for Claude.ai custom connector.
 Uses Streamable HTTP transport for compatibility with Claude.ai browser.
+
+Authentication: Bearer token required (set MCP_AUTH_TOKEN env var)
 """
 
 import os
+import secrets
+import logging
 import httpx
 from mcp.server.fastmcp import FastMCP
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
 
 # Configuration
 FLASK_URL = os.environ.get('FLASK_URL', 'http://localhost:8443')
+MCP_AUTH_TOKEN = os.environ.get('MCP_AUTH_TOKEN')
+
+# Generate a token if not set (will be logged for initial setup)
+if not MCP_AUTH_TOKEN:
+    MCP_AUTH_TOKEN = secrets.token_urlsafe(32)
+    logger.warning("MCP_AUTH_TOKEN not set! Generated temporary token (add to .env):")
+    logger.warning(f"MCP_AUTH_TOKEN={MCP_AUTH_TOKEN}")
+
+
+class BearerAuthMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware to require bearer token authentication.
+
+    Claude.ai sends the token via Authorization header when configured
+    with authorization_token in the custom connector settings.
+    """
+
+    # Paths that don't require authentication
+    PUBLIC_PATHS = {'/health', '/healthz', '/.well-known'}
+
+    async def dispatch(self, request, call_next):
+        path = request.url.path
+
+        # Allow public paths
+        if any(path.startswith(p) for p in self.PUBLIC_PATHS):
+            return await call_next(request)
+
+        # Check Authorization header
+        auth_header = request.headers.get('Authorization', '')
+
+        if not auth_header.startswith('Bearer '):
+            return JSONResponse(
+                {"error": "missing or invalid Authorization header"},
+                status_code=401,
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+
+        token = auth_header[7:]  # Remove "Bearer " prefix
+
+        if not secrets.compare_digest(token, MCP_AUTH_TOKEN):
+            return JSONResponse(
+                {"error": "invalid token"},
+                status_code=401,
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+
+        return await call_next(request)
+
 
 # Initialize MCP server
 mcp = FastMCP(
@@ -143,18 +199,32 @@ async def list_services() -> dict:
         return {"error": str(e)}
 
 
-if __name__ == "__main__":
-    import logging
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
+def create_app():
+    """Create the ASGI app with authentication middleware."""
+    app = mcp.http_app()
+    app.add_middleware(BearerAuthMiddleware)
+    return app
 
-    port = int(os.environ.get('MCP_PORT', 8001))
+
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+
+    # Default to port 10000 (Tailscale Funnel compatible)
+    port = int(os.environ.get('MCP_PORT', 10000))
+
     logger.info(f"Starting MCP server on port {port}")
     logger.info(f"Flask backend: {FLASK_URL}")
+    logger.info(f"Authentication: Bearer token required")
 
-    # Run with Streamable HTTP transport for Claude.ai custom connector
-    mcp.run(
-        transport="streamable-http",
-        host="127.0.0.1",
-        port=port
-    )
+    if os.environ.get('MCP_AUTH_TOKEN'):
+        logger.info("Using MCP_AUTH_TOKEN from environment")
+    else:
+        logger.warning("Add MCP_AUTH_TOKEN to .env for persistent token")
+
+    # Run with authentication middleware
+    import uvicorn
+    app = create_app()
+    uvicorn.run(app, host="127.0.0.1", port=port)

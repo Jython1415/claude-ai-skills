@@ -38,28 +38,18 @@ cp server/credentials.example.json server/credentials.json
 
 This starts:
 - **Flask proxy** on port 8443 (sessions, proxy, git bundles)
-- **MCP server** on port 8001 (custom connector for Claude.ai)
+- **MCP server** on port 10000 (custom connector for Claude.ai)
 
-### 4. Expose via Tailscale Funnel
+### 4. Add MCP Custom Connector in Claude.ai
 
-```bash
-# Expose both servers (one-time)
-tailscale serve --bg --https=8443 http://127.0.0.1:8443
-tailscale serve --bg --https=8001 http://127.0.0.1:8001
-tailscale funnel 8443
-tailscale funnel 8001
+The setup script will print your URL and auth token. In Claude.ai:
 
-# Get your URLs
-tailscale funnel status
-```
+1. Go to Settings > Connectors > Add Custom Connector
+2. Enter URL: `https://<your-machine>.<tailnet>.ts.net:10000/mcp`
+3. Click "Advanced settings" and enter the authorization token from the setup output
+4. Click "Add"
 
-### 5. Add MCP Custom Connector in Claude.ai
-
-1. Go to Claude.ai Settings > Connectors
-2. Click "Add Custom Connector"
-3. Enter URL: `https://<your-machine>.<tailnet>.ts.net:8001/mcp`
-4. Leave authentication empty (Tailscale provides network security)
-5. Click "Add"
+**Note:** Port 10000 is used because Tailscale Funnel only allows ports 443, 8443, and 10000.
 
 ## Usage in Claude.ai
 

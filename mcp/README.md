@@ -8,48 +8,46 @@ MCP server providing session management for the credential proxy. Works as a Cla
 - Flask server running (port 8443)
 - Tailscale for network access
 
-## Installation
+## Quick Setup
+
+Run the setup script (handles everything including Tailscale Funnel):
 
 ```bash
-cd /path/to/claude-git-bridge
-uv pip install -r requirements.txt
+./scripts/setup-launchagents.sh
 ```
 
-## Running Locally
+This will:
+- Install LaunchAgents for auto-start on login
+- Generate an MCP auth token and save to `.env`
+- Configure Tailscale Funnel
+- Print the URL and token for Claude.ai
 
-1. Start the Flask server (in one terminal):
+## Manual Setup
+
+1. Start the Flask server:
    ```bash
-   (cd server && uv run proxy_server.py)
+   uv run python server/proxy_server.py
    ```
 
-2. Start the MCP server (in another terminal):
+2. Start the MCP server with auth token:
    ```bash
-   (cd mcp && FLASK_URL=http://localhost:8443 uv run server.py)
+   MCP_AUTH_TOKEN=your-secret-token uv run python mcp/server.py
    ```
 
 ## Claude.ai Custom Connector Setup
 
-1. Expose both servers via Tailscale Funnel:
-   ```bash
-   # Flask server
-   tailscale serve --bg --https=8443 http://127.0.0.1:8443
-   tailscale funnel 8443
+1. In Claude.ai, go to Settings > Connectors > Add Custom Connector
 
-   # MCP server
-   tailscale serve --bg --https=8001 http://127.0.0.1:8001
-   tailscale funnel 8001
+2. Enter the MCP server URL:
+   ```
+   https://<your-machine>.<tailnet>.ts.net:10000/mcp
    ```
 
-2. In Claude.ai, go to Settings > Connectors > Add Custom Connector
+3. Click "Advanced settings" and enter the authorization token from `.env`
 
-3. Enter the MCP server URL:
-   ```
-   https://<your-machine>.<tailnet>.ts.net:8001/mcp
-   ```
+4. Click "Add" to connect
 
-4. Leave authentication empty (Tailscale provides network security)
-
-5. Click "Add" to connect
+**Note:** Port 10000 is used because Tailscale Funnel only allows ports 443, 8443, and 10000.
 
 ## Available Tools
 

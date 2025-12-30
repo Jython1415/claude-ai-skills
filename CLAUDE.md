@@ -30,7 +30,8 @@ Claude.ai
 
 ### MCP Server (`mcp/`)
 - `server.py` - FastMCP server with `create_session`, `revoke_session`, `list_services`
-- Runs on port 8001 with Streamable HTTP transport
+- Runs on port 10000 with Streamable HTTP transport (Tailscale Funnel compatible)
+- Requires bearer token authentication (set `MCP_AUTH_TOKEN` env var)
 
 ### Client (`skill-package/git-proxy/`)
 - `git_client.py` - Python client supporting both session and key auth
