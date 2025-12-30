@@ -64,7 +64,7 @@ This preserves Claude's ability to write scripts against *any* endpoint, not jus
 
 ### Phase 1: Extend the Server
 
-Modify the existing Flask server in claude-git-bridge to add:
+Modify the existing Flask server in claude-credential-proxy to add:
 
 1. **Session management**
    - In-memory dict is fine for prototype (sessions don't need to survive restarts)
@@ -104,7 +104,7 @@ Port the existing bluesky-access skill to use this pattern:
 ## File Structure (Proposed)
 
 ```
-claude-git-bridge/
+claude-credential-proxy/
 ├── server/
 │   ├── app.py                 # Main Flask app (extend existing)
 │   ├── sessions.py            # Session management
@@ -145,7 +145,7 @@ For Claude Code implementing this:
 
 1. Should git operations also go through session auth, or keep the separate `X-Auth-Key` for backward compatibility during transition?
 2. Where should the MCP server run - same process as Flask, or separate? Same machine?
-3. Naming: "claude-git-bridge" no longer describes what this is. Rename to "claude-credential-proxy" or similar?
+3. ~~Naming: "claude-git-bridge" no longer describes what this is. Rename to "claude-credential-proxy" or similar?~~ **Done - renamed to claude-credential-proxy**
 
 ---
 
