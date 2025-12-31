@@ -113,7 +113,7 @@ FLASK_URL=http://localhost:8443 uv run python mcp/server.py
 Both servers auto-start on login via LaunchAgents:
 
 ```bash
-# Install (one-time)
+# Install (one-time) or restart servers
 ./scripts/setup-launchagents.sh
 
 # Check status
@@ -123,6 +123,12 @@ launchctl list | grep joshuashew
 tail -f ~/Library/Logs/com.joshuashew.credential-proxy.log
 tail -f ~/Library/Logs/com.joshuashew.mcp-server.log
 ```
+
+**Important for Claude Code:**
+- The setup script (`setup-launchagents.sh`) must be run by the USER, not by Claude
+- Claude cannot execute this script due to launchctl permissions
+- If servers need restarting, ask the user to run: `./scripts/setup-launchagents.sh`
+- The script is idempotent - safe to run multiple times (detects and restarts existing servers)
 
 ## Tailscale Funnel
 

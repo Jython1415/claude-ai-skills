@@ -6,8 +6,19 @@
 # 1. LaunchAgents to auto-start Flask proxy and MCP server on login
 # 2. Tailscale Funnel to expose both servers via HTTPS
 #
+# Features:
+# - Idempotent: Safe to run multiple times (detects and restarts existing servers)
+# - Validates GitHub OAuth credentials from .env before starting
+# - Verifies both servers started successfully after configuration
+# - Handles graceful shutdown with sleep delays for clean restarts
+#
 # Usage:
-#   ./scripts/setup-launchagents.sh
+#   ./scripts/setup-launchagents.sh    # First install OR restart servers
+#
+# Requirements:
+# - .env file with GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_ALLOWED_USERS
+# - uv package manager installed
+# - Tailscale installed (optional, for Funnel setup)
 #
 # To check status:
 #   launchctl list | grep joshuashew
@@ -50,6 +61,12 @@ echo "========================================"
 echo "Project directory: $PROJECT_DIR"
 echo "uv binary: $UV_BIN"
 echo ""
+
+# Check if this is a restart or fresh install
+if launchctl list 2>/dev/null | grep -q "com.joshuashew.credential-proxy"; then
+    echo "Note: Existing servers detected - will restart them"
+    echo ""
+fi
 
 # Ensure .venv exists and dependencies are installed
 echo "Syncing dependencies..."
@@ -98,10 +115,11 @@ echo "----------------------------------------"
 PROXY_PLIST="$LAUNCH_AGENTS_DIR/com.joshuashew.credential-proxy.plist"
 PROXY_LABEL="com.joshuashew.credential-proxy"
 
-# Unload existing if present
+# Unload existing if present (handles both restart and fresh install)
 if launchctl list 2>/dev/null | grep -q "$PROXY_LABEL"; then
     echo "Stopping existing credential proxy..."
     launchctl unload "$PROXY_PLIST" 2>/dev/null || true
+    sleep 1  # Give it time to stop
 fi
 
 # Also unload old gitproxy if present
@@ -170,10 +188,11 @@ echo "----------------------------------------"
 MCP_PLIST="$LAUNCH_AGENTS_DIR/com.joshuashew.mcp-server.plist"
 MCP_LABEL="com.joshuashew.mcp-server"
 
-# Unload existing if present
+# Unload existing if present (handles both restart and fresh install)
 if launchctl list 2>/dev/null | grep -q "$MCP_LABEL"; then
     echo "Stopping existing MCP server..."
     launchctl unload "$MCP_PLIST" 2>/dev/null || true
+    sleep 1  # Give it time to stop
 fi
 
 echo "Creating $MCP_PLIST..."
@@ -295,3 +314,19 @@ echo ""
 echo "Status commands:"
 echo "  launchctl list | grep joshuashew"
 echo "  tailscale funnel status"
+echo ""
+
+# Verify servers started
+echo "Verifying servers started..."
+sleep 2
+if launchctl list 2>/dev/null | grep -q "$PROXY_LABEL"; then
+    echo "  ✓ Flask Proxy server running"
+else
+    echo "  ✗ Flask Proxy server NOT running - check logs"
+fi
+
+if launchctl list 2>/dev/null | grep -q "$MCP_LABEL"; then
+    echo "  ✓ MCP server running"
+else
+    echo "  ✗ MCP server NOT running - check logs"
+fi
