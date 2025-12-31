@@ -31,8 +31,8 @@ cd "$REPO_ROOT/skills"
 # Remove old ZIP if exists
 rm -f "$SKILL_NAME-skill.zip"
 
-# Create ZIP (exclude VERSION - it's workflow metadata, not part of the skill)
-zip -r "$SKILL_NAME-skill.zip" "$SKILL_NAME" -x "$SKILL_NAME/VERSION" "$SKILL_NAME/*.zip"
+# Create ZIP (include VERSION so users know which version they have)
+zip -r "$SKILL_NAME-skill.zip" "$SKILL_NAME" -x "$SKILL_NAME/*.zip"
 
 echo "✓ Created $SKILL_NAME-skill.zip"
 echo "ZIP contents:"

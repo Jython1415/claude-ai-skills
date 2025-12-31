@@ -77,10 +77,10 @@ fi
 BUILD_DIR=$(mktemp -d)
 trap "rm -rf $BUILD_DIR" EXIT
 
-# Copy skill files (exclude VERSION metadata)
+# Copy skill files
 echo "Building skill package..."
 cd "$SKILL_DIR"
-zip -r "$BUILD_DIR/$ZIP_NAME" . -x "VERSION" "*.zip"
+zip -r "$BUILD_DIR/$ZIP_NAME" . -x "*.zip"
 cd - > /dev/null
 
 # Verify ZIP was created
