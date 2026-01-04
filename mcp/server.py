@@ -9,6 +9,7 @@ Authentication: GitHub OAuth with username allowlist
 """
 
 import os
+import sys
 import logging
 import httpx
 from functools import wraps
@@ -16,7 +17,14 @@ from typing import Callable, Any
 from fastmcp import FastMCP, Context
 from fastmcp.server.auth.providers.github import GitHubProvider
 
+# Add parent directory to path to import server modules
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from server.error_redaction import get_redactor
+
 logger = logging.getLogger(__name__)
+
+# Initialize credential redactor
+redactor = get_redactor()
 
 # Configuration
 FLASK_URL = os.environ.get('FLASK_URL', 'http://localhost:8443')
@@ -123,7 +131,10 @@ async def create_session(context: Context, services: list[str], ttl_minutes: int
     except httpx.ConnectError:
         return {"error": f"could not connect to proxy server at {FLASK_URL}"}
     except Exception as e:
-        return {"error": str(e)}
+        # Log full exception for local debugging
+        logger.error(f"MCP tool error: {e}")
+        # Return generic error to client (don't expose exception details)
+        return {"error": "Operation failed", "details": "An unexpected error occurred. Check server logs."}
 
 
 @mcp.tool()
@@ -159,7 +170,10 @@ async def revoke_session(context: Context, session_id: str) -> dict:
     except httpx.ConnectError:
         return {"error": f"could not connect to proxy server at {FLASK_URL}"}
     except Exception as e:
-        return {"error": str(e)}
+        # Log full exception for local debugging
+        logger.error(f"MCP tool error: {e}")
+        # Return generic error to client (don't expose exception details)
+        return {"error": "Operation failed", "details": "An unexpected error occurred. Check server logs."}
 
 
 @mcp.tool()
@@ -194,7 +208,10 @@ async def list_services(context: Context) -> dict:
     except httpx.ConnectError:
         return {"error": f"could not connect to proxy server at {FLASK_URL}"}
     except Exception as e:
-        return {"error": str(e)}
+        # Log full exception for local debugging
+        logger.error(f"MCP tool error: {e}")
+        # Return generic error to client (don't expose exception details)
+        return {"error": "Operation failed", "details": "An unexpected error occurred. Check server logs."}
 
 
 if __name__ == "__main__":

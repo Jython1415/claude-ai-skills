@@ -85,7 +85,8 @@ class GitProxyClient:
         )
 
         if response.status_code != 200:
-            raise Exception(f"Fetch bundle failed: {response.status_code} - {response.text}")
+            # Don't include response.text (may contain credentials)
+            raise Exception(f"Fetch bundle failed: HTTP {response.status_code}")
 
         # Save bundle file
         with open(output_path, 'wb') as f:
@@ -138,7 +139,8 @@ class GitProxyClient:
             )
 
         if response.status_code != 200:
-            raise Exception(f"Push bundle failed: {response.status_code} - {response.text}")
+            # Don't include response.text (may contain credentials)
+            raise Exception(f"Push bundle failed: HTTP {response.status_code}")
 
         return response.json()
 
