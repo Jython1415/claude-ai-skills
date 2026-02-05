@@ -22,6 +22,8 @@ import shutil
 from sessions import SessionStore
 from credentials import CredentialStore
 from proxy import forward_request
+from error_redaction import get_redactor
+from error_utils import error_response
 
 # Load .env file if it exists
 try:
@@ -62,6 +64,9 @@ else:
 # Initialize session and credential stores
 session_store = SessionStore()
 credential_store = CredentialStore()
+
+# Initialize credential redactor for sanitizing error messages
+redactor = get_redactor()
 
 logger.info(f"Loaded {len(credential_store.list_services())} service(s) from credential store")
 
@@ -259,8 +264,27 @@ def fetch_bundle():
                 text=True
             )
             if result.returncode != 0:
+                # Log full details locally for debugging
                 logger.error(f"Clone failed: {result.stderr}")
-                return jsonify({'error': f'clone failed: {result.stderr}'}), 500
+
+                # Interpret common git errors for client response
+                stderr_lower = result.stderr.lower()
+                if 'permission denied' in stderr_lower or 'authentication failed' in stderr_lower:
+                    why = "SSH key authentication failed"
+                    action = "Run 'ssh -T git@github.com' to test SSH access"
+                elif 'not found' in stderr_lower or 'repository not found' in stderr_lower:
+                    why = "Repository URL is incorrect or doesn't exist"
+                    action = "Verify repository URL and credentials are correct"
+                else:
+                    why = "Git clone operation failed"
+                    action = "Check repository URL and GitHub credentials"
+
+                return error_response(
+                    what="Clone failed",
+                    why=why,
+                    action=action,
+                    status=500
+                )
 
             # Create bundle file
             bundle_file = tempfile.NamedTemporaryFile(delete=False, suffix='.bundle')
@@ -277,9 +301,15 @@ def fetch_bundle():
             )
 
             if result.returncode != 0:
+                # Log full details locally for debugging
                 logger.error(f"Bundle creation failed: {result.stderr}")
                 os.unlink(bundle_path)
-                return jsonify({'error': f'bundle creation failed: {result.stderr}'}), 500
+                return error_response(
+                    what="Bundle creation failed",
+                    why="Git bundle operation encountered an error",
+                    action="Verify the repository has commits and is accessible",
+                    status=500
+                )
 
             logger.info(f"Bundle created successfully, temp repo cleaned up")
 
@@ -296,8 +326,15 @@ def fetch_bundle():
         return jsonify({'error': 'operation timeout'}), 408
 
     except Exception as e:
+        # Log full exception for local debugging
         logger.error(f"Error creating bundle: {e}")
-        return jsonify({'error': str(e)}), 500
+        # Return generic error to client (don't expose exception details)
+        return error_response(
+            what="Bundle operation failed",
+            why="An unexpected error occurred",
+            action="Check proxy server logs for details",
+            status=500
+        )
 
 
 @app.route('/git/push-bundle', methods=['POST'])
@@ -367,8 +404,27 @@ def push_bundle():
                 text=True
             )
             if result.returncode != 0:
+                # Log full details locally for debugging
                 logger.error(f"Clone failed: {result.stderr}")
-                return jsonify({'error': f'clone failed: {result.stderr}'}), 500
+
+                # Interpret common git errors for client response
+                stderr_lower = result.stderr.lower()
+                if 'permission denied' in stderr_lower or 'authentication failed' in stderr_lower:
+                    why = "SSH key authentication failed"
+                    action = "Run 'ssh -T git@github.com' to test SSH access"
+                elif 'not found' in stderr_lower or 'repository not found' in stderr_lower:
+                    why = "Repository URL is incorrect or doesn't exist"
+                    action = "Verify repository URL and credentials are correct"
+                else:
+                    why = "Git clone operation failed"
+                    action = "Check repository URL and GitHub credentials"
+
+                return error_response(
+                    what="Clone failed",
+                    why=why,
+                    action=action,
+                    status=500
+                )
 
             # Fetch bundle into repository
             logger.info(f"Fetching bundle into {branch}")
@@ -381,8 +437,14 @@ def push_bundle():
             )
 
             if result.returncode != 0:
+                # Log full details locally for debugging
                 logger.error(f"Bundle fetch failed: {result.stderr}")
-                return jsonify({'error': f'bundle fetch failed: {result.stderr}'}), 500
+                return error_response(
+                    what="Bundle fetch failed",
+                    why="Failed to apply bundle to repository",
+                    action=f"Verify the bundle file is valid and branch '{branch}' is correct",
+                    status=500
+                )
 
             # Push branch to remote
             logger.info(f"Pushing {branch} to origin")
@@ -395,8 +457,27 @@ def push_bundle():
             )
 
             if result.returncode != 0:
+                # Log full details locally for debugging
                 logger.error(f"Push failed: {result.stderr}")
-                return jsonify({'error': f'push failed: {result.stderr}'}), 500
+
+                # Interpret common push errors for client response
+                stderr_lower = result.stderr.lower()
+                if 'rejected' in stderr_lower or 'protected branch' in stderr_lower:
+                    why = "Branch is protected or push was rejected"
+                    action = f"Check branch protection rules for '{branch}' on GitHub"
+                elif 'permission denied' in stderr_lower or 'authentication failed' in stderr_lower:
+                    why = "SSH key authentication failed"
+                    action = "Verify GitHub SSH access and push permissions"
+                else:
+                    why = "Git push operation failed"
+                    action = "Check repository push permissions and network connectivity"
+
+                return error_response(
+                    what="Push failed",
+                    why=why,
+                    action=action,
+                    status=500
+                )
 
             response = {
                 'status': 'success',
@@ -441,9 +522,10 @@ def push_bundle():
                         response['pr_url'] = pr_url
                         logger.info(f"PR created: {pr_url}")
                     else:
+                        # Log full details locally for debugging
                         logger.warning(f"PR creation failed: {result.stderr}")
                         response['pr_created'] = False
-                        response['pr_error'] = result.stderr
+                        response['pr_error'] = "PR creation failed"  # Generic error for client
 
                         # Provide manual PR URL as fallback
                         try:
@@ -464,8 +546,15 @@ def push_bundle():
         return jsonify({'error': 'operation timeout'}), 408
 
     except Exception as e:
+        # Log full exception for local debugging
         logger.error(f"Error pushing bundle: {e}")
-        return jsonify({'error': str(e)}), 500
+        # Return generic error to client (don't expose exception details)
+        return error_response(
+            what="Push operation failed",
+            why="An unexpected error occurred",
+            action="Check proxy server logs for details",
+            status=500
+        )
 
     finally:
         # Clean up temp bundle file

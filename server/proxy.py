@@ -11,8 +11,12 @@ from flask import Response, stream_with_context
 from typing import Optional
 
 from credentials import CredentialStore
+from error_redaction import get_redactor
 
 logger = logging.getLogger(__name__)
+
+# Initialize credential redactor
+redactor = get_redactor()
 
 # Headers that should not be forwarded (hop-by-hop headers)
 HOP_BY_HOP_HEADERS = {
@@ -158,9 +162,11 @@ def forward_request(
         )
 
     except Exception as e:
+        # Log full exception for local debugging
         logger.error(f"Error proxying to {service}/{path}: {e}")
+        # Return generic error to client (don't expose exception details)
         return Response(
-            f'{{"error": "proxy error: {str(e)}"}}',
+            '{"what": "Proxy error occurred", "why": "Request forwarding failed", "action": "Check proxy server logs for details"}',
             status=500,
             mimetype='application/json'
         )
