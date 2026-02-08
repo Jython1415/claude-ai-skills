@@ -1,6 +1,6 @@
-# Claude Credential Proxy
+# Claude AI Skills
 
-Credential proxy and git bundle server for Claude.ai. Enables Claude to access APIs (Bluesky, GitHub, etc.) and clone/push git repos without exposing credentials.
+A collection of skills for Claude.ai, powered by a credential proxy that enables Claude to access APIs (Bluesky, GitHub, etc.) and clone/push git repos without exposing credentials.
 
 ## Features
 
