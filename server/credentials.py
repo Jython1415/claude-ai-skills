@@ -225,12 +225,23 @@ class CredentialStore:
             config_path: Path to credentials.json. Defaults to same directory as this file.
         """
         self._credentials: dict[str, ServiceCredential] = {}
+        self._last_mtime: float = 0
 
         if config_path is None:
             config_path = os.path.join(os.path.dirname(__file__), "credentials.json")
 
         self._config_path = config_path
         self._load()
+
+    def _check_reload(self) -> None:
+        """Reload credentials if the config file has been modified."""
+        try:
+            mtime = os.path.getmtime(self._config_path)
+        except OSError:
+            return
+        if mtime != self._last_mtime:
+            logger.info("Credentials file changed, reloading...")
+            self.reload()
 
     def _load(self) -> None:
         """Load credentials from JSON file."""
@@ -240,6 +251,7 @@ class CredentialStore:
             return
 
         try:
+            self._last_mtime = os.path.getmtime(self._config_path)
             with open(self._config_path, 'r') as f:
                 config = json.load(f)
 
@@ -327,6 +339,7 @@ class CredentialStore:
         Returns:
             ServiceCredential if found, None otherwise
         """
+        self._check_reload()
         return self._credentials.get(service)
 
     def list_services(self) -> list[str]:
@@ -336,6 +349,7 @@ class CredentialStore:
         Returns:
             List of service names
         """
+        self._check_reload()
         return sorted(self._credentials.keys())
 
     def has_service(self, service: str) -> bool:
