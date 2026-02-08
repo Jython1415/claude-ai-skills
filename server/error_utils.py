@@ -6,15 +6,10 @@ mandatory "what" field and optional "why" and "action" hints for Claude.
 """
 
 from flask import jsonify
-from typing import Optional, Union, List
 
 
 def error_response(
-    what: str,
-    why: Optional[str] = None,
-    action: Optional[Union[str, List[str]]] = None,
-    code: Optional[str] = None,
-    status: int = 500
+    what: str, why: str | None = None, action: str | list[str] | None = None, code: str | None = None, status: int = 500
 ):
     """
     Build a structured error response.
@@ -50,15 +45,15 @@ def error_response(
         ...     status=401
         ... )
     """
-    response = {'what': what}
+    response = {"what": what}
 
     if why:
-        response['why'] = why
+        response["why"] = why
 
     if action:
-        response['action'] = action
+        response["action"] = action
 
     if code:
-        response['code'] = code
+        response["code"] = code
 
     return jsonify(response), status

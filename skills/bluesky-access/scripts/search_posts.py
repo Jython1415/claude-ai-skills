@@ -19,7 +19,7 @@ Example:
 
 import os
 import sys
-import json
+
 import requests
 
 
@@ -34,20 +34,17 @@ def search_posts(query: str, limit: int = 25) -> dict:
     Returns:
         API response with posts array
     """
-    session_id = os.environ.get('SESSION_ID')
-    proxy_url = os.environ.get('PROXY_URL')
+    session_id = os.environ.get("SESSION_ID")
+    proxy_url = os.environ.get("PROXY_URL")
 
     if not session_id or not proxy_url:
-        raise ValueError(
-            "SESSION_ID and PROXY_URL environment variables required.\n"
-            "Use MCP create_session tool first."
-        )
+        raise ValueError("SESSION_ID and PROXY_URL environment variables required.\nUse MCP create_session tool first.")
 
     response = requests.get(
         f"{proxy_url}/proxy/bsky/app.bsky.feed.searchPosts",
         params={"q": query, "limit": min(limit, 100)},
         headers={"X-Session-Id": session_id},
-        timeout=30
+        timeout=30,
     )
 
     if response.status_code == 401:
@@ -72,11 +69,7 @@ def format_post(post: dict) -> str:
     reposts = post.get("repostCount", 0)
     replies = post.get("replyCount", 0)
 
-    return (
-        f"@{handle} ({display_name}) - {created_at}\n"
-        f"{text}\n"
-        f"[{likes} likes, {reposts} reposts, {replies} replies]\n"
-    )
+    return f"@{handle} ({display_name}) - {created_at}\n{text}\n[{likes} likes, {reposts} reposts, {replies} replies]\n"
 
 
 def main():

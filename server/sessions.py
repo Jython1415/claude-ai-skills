@@ -5,16 +5,16 @@ Provides in-memory session storage with automatic expiry.
 Sessions grant time-limited access to specified services.
 """
 
-import uuid
 import threading
-from dataclasses import dataclass, field
+import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Optional
 
 
 @dataclass
 class Session:
     """Represents an authenticated session with access to specific services."""
+
     session_id: str
     services: list[str]
     created_at: datetime
@@ -64,7 +64,7 @@ class SessionStore:
             session_id=session_id,
             services=list(services),  # Copy to prevent external modification
             created_at=now,
-            expires_at=now + timedelta(minutes=ttl_minutes)
+            expires_at=now + timedelta(minutes=ttl_minutes),
         )
 
         with self._lock:
@@ -72,7 +72,7 @@ class SessionStore:
 
         return session
 
-    def get(self, session_id: str) -> Optional[Session]:
+    def get(self, session_id: str) -> Session | None:
         """
         Get a session by ID if it exists and hasn't expired.
 
@@ -139,14 +139,10 @@ class SessionStore:
         Returns:
             Number of expired sessions removed
         """
-        now = datetime.now()
         removed = 0
 
         with self._lock:
-            expired_ids = [
-                sid for sid, session in self._sessions.items()
-                if session.is_expired()
-            ]
+            expired_ids = [sid for sid, session in self._sessions.items() if session.is_expired()]
             for sid in expired_ids:
                 del self._sessions[sid]
                 if self._on_session_expired:
@@ -158,11 +154,7 @@ class SessionStore:
     def count(self) -> int:
         """Get the number of active (non-expired) sessions."""
         with self._lock:
-            now = datetime.now()
-            return sum(
-                1 for session in self._sessions.values()
-                if not session.is_expired()
-            )
+            return sum(1 for session in self._sessions.values() if not session.is_expired())
 
     def list_sessions(self) -> list[dict]:
         """
@@ -174,11 +166,11 @@ class SessionStore:
         with self._lock:
             return [
                 {
-                    'session_id': session.session_id,
-                    'services': session.services,
-                    'created_at': session.created_at.isoformat(),
-                    'expires_at': session.expires_at.isoformat(),
-                    'minutes_remaining': int(session.time_remaining().total_seconds() / 60)
+                    "session_id": session.session_id,
+                    "services": session.services,
+                    "created_at": session.created_at.isoformat(),
+                    "expires_at": session.expires_at.isoformat(),
+                    "minutes_remaining": int(session.time_remaining().total_seconds() / 60),
                 }
                 for session in self._sessions.values()
                 if not session.is_expired()

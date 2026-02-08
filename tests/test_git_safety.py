@@ -7,19 +7,19 @@ traversal, etc.).
 """
 
 import pytest
-from server.git_safety import (
-    validate_repo_url,
-    validate_branch_name,
-    is_protected_branch,
-    validate_push_command_safety,
-    PROTECTED_BRANCHES,
-    DANGEROUS_PUSH_FLAGS,
-)
 
+from server.git_safety import (
+    DANGEROUS_PUSH_FLAGS,
+    is_protected_branch,
+    validate_branch_name,
+    validate_push_command_safety,
+    validate_repo_url,
+)
 
 # =============================================================================
 # validate_repo_url tests
 # =============================================================================
+
 
 class TestValidateRepoUrl:
     """Tests for repository URL validation."""
@@ -172,6 +172,7 @@ class TestValidateRepoUrl:
 # =============================================================================
 # validate_branch_name tests
 # =============================================================================
+
 
 class TestValidateBranchName:
     """Tests for branch name validation."""
@@ -333,6 +334,7 @@ class TestValidateBranchName:
 # is_protected_branch tests
 # =============================================================================
 
+
 class TestIsProtectedBranch:
     """Tests for protected branch detection."""
 
@@ -403,60 +405,61 @@ class TestIsProtectedBranch:
 # validate_push_command_safety tests
 # =============================================================================
 
+
 class TestValidatePushCommandSafety:
     """Tests for defense-in-depth push command validation."""
 
     def test_normal_push_is_safe(self):
-        safe, error = validate_push_command_safety(['git', 'push', 'origin', 'feature-branch'])
+        safe, error = validate_push_command_safety(["git", "push", "origin", "feature-branch"])
         assert safe is True
         assert error == ""
 
     def test_force_push_blocked(self):
-        safe, error = validate_push_command_safety(['git', 'push', '--force', 'origin', 'main'])
+        safe, error = validate_push_command_safety(["git", "push", "--force", "origin", "main"])
         assert safe is False
         assert "--force" in error
 
     def test_force_short_flag_blocked(self):
-        safe, error = validate_push_command_safety(['git', 'push', '-f', 'origin', 'main'])
+        safe, error = validate_push_command_safety(["git", "push", "-f", "origin", "main"])
         assert safe is False
         assert "-f" in error
 
     def test_force_with_lease_blocked(self):
-        safe, error = validate_push_command_safety(['git', 'push', '--force-with-lease', 'origin', 'main'])
+        safe, error = validate_push_command_safety(["git", "push", "--force-with-lease", "origin", "main"])
         assert safe is False
         assert "--force-with-lease" in error
 
     def test_delete_flag_blocked(self):
-        safe, error = validate_push_command_safety(['git', 'push', '--delete', 'origin', 'feature'])
+        safe, error = validate_push_command_safety(["git", "push", "--delete", "origin", "feature"])
         assert safe is False
         assert "--delete" in error
 
     def test_mirror_flag_blocked(self):
-        safe, error = validate_push_command_safety(['git', 'push', '--mirror'])
+        safe, error = validate_push_command_safety(["git", "push", "--mirror"])
         assert safe is False
         assert "--mirror" in error
 
     def test_force_if_includes_blocked(self):
-        safe, error = validate_push_command_safety(['git', 'push', '--force-if-includes', 'origin', 'main'])
+        safe, error = validate_push_command_safety(["git", "push", "--force-if-includes", "origin", "main"])
         assert safe is False
         assert "--force-if-includes" in error
 
     def test_colon_deletion_syntax_blocked(self):
         """git push origin :branch-name deletes the remote branch."""
-        safe, error = validate_push_command_safety(['git', 'push', 'origin', ':feature-branch'])
+        safe, error = validate_push_command_safety(["git", "push", "origin", ":feature-branch"])
         assert safe is False
         assert "deletion" in error.lower()
 
     def test_empty_colon_not_blocked(self):
         """A lone colon should not trigger the deletion check."""
-        safe, error = validate_push_command_safety(['git', 'push', 'origin', ':'])
+        safe, error = validate_push_command_safety(["git", "push", "origin", ":"])
         # ':' has length 1, so it's not caught by len(arg) > 1
         assert safe is True
 
     def test_all_dangerous_flags_covered(self):
         """Verify every flag in DANGEROUS_PUSH_FLAGS is actually blocked."""
         for flag in DANGEROUS_PUSH_FLAGS:
-            safe, error = validate_push_command_safety(['git', 'push', flag, 'origin', 'branch'])
+            safe, error = validate_push_command_safety(["git", "push", flag, "origin", "branch"])
             assert safe is False, f"Flag {flag} was not blocked"
 
 

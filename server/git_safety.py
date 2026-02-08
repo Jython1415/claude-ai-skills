@@ -10,37 +10,35 @@ When is_valid is True, error_message is an empty string.
 """
 
 import re
-from typing import Tuple
-
 
 # Protected branches that should not receive direct pushes (must go through PRs)
-PROTECTED_BRANCHES = frozenset({
-    'main',
-    'master',
-    'production',
-    'release',
-    'develop',
-})
+PROTECTED_BRANCHES = frozenset(
+    {
+        "main",
+        "master",
+        "production",
+        "release",
+        "develop",
+    }
+)
 
 # Git push flags that must never appear in push commands (defense-in-depth)
-DANGEROUS_PUSH_FLAGS = frozenset({
-    '--force',
-    '-f',
-    '--force-with-lease',
-    '--delete',
-    '--mirror',
-    '--force-if-includes',
-})
+DANGEROUS_PUSH_FLAGS = frozenset(
+    {
+        "--force",
+        "-f",
+        "--force-with-lease",
+        "--delete",
+        "--mirror",
+        "--force-if-includes",
+    }
+)
 
 # Valid GitHub URL patterns
 # Supports: https://github.com/owner/repo, https://github.com/owner/repo.git
-_GITHUB_HTTPS_PATTERN = re.compile(
-    r'^https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+(\.git)?$'
-)
+_GITHUB_HTTPS_PATTERN = re.compile(r"^https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+(\.git)?$")
 # Supports: git@github.com:owner/repo.git
-_GITHUB_SSH_PATTERN = re.compile(
-    r'^git@github\.com:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+(\.git)?$'
-)
+_GITHUB_SSH_PATTERN = re.compile(r"^git@github\.com:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+(\.git)?$")
 
 # Valid git branch name pattern
 # Based on git-check-ref-format rules:
@@ -51,15 +49,13 @@ _GITHUB_SSH_PATTERN = re.compile(
 # - Cannot be a single @
 # We use a strict allowlist approach: alphanumeric, hyphens, underscores,
 # forward slashes, and dots (with additional constraints).
-_BRANCH_NAME_PATTERN = re.compile(
-    r'^[A-Za-z0-9][A-Za-z0-9._/-]*[A-Za-z0-9]$|^[A-Za-z0-9]$'
-)
+_BRANCH_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*[A-Za-z0-9]$|^[A-Za-z0-9]$")
 
 # Characters that could enable shell injection
 _SHELL_METACHARACTERS = re.compile(r'[;&|`$(){}!\'"\\<>\n\r\x00]')
 
 
-def validate_repo_url(url: str) -> Tuple[bool, str]:
+def validate_repo_url(url: str) -> tuple[bool, str]:
     """
     Validate that a repository URL is a legitimate GitHub URL.
 
@@ -86,11 +82,11 @@ def validate_repo_url(url: str) -> Tuple[bool, str]:
         return False, "Repository URL contains invalid characters"
 
     # Block embedded credentials in URL
-    if '@' in url and not url.startswith('git@'):
+    if "@" in url and not url.startswith("git@"):
         return False, "Repository URL must not contain embedded credentials"
 
     # Block local paths and file:// URLs
-    if url.startswith('/') or url.startswith('file://') or url.startswith('.'):
+    if url.startswith("/") or url.startswith("file://") or url.startswith("."):
         return False, "Only remote GitHub repository URLs are allowed (not local paths)"
 
     # Must match GitHub HTTPS or SSH patterns
@@ -101,12 +97,11 @@ def validate_repo_url(url: str) -> Tuple[bool, str]:
         return True, ""
 
     return False, (
-        "Repository URL must be a GitHub URL "
-        "(https://github.com/owner/repo or git@github.com:owner/repo.git)"
+        "Repository URL must be a GitHub URL (https://github.com/owner/repo or git@github.com:owner/repo.git)"
     )
 
 
-def validate_branch_name(branch: str) -> Tuple[bool, str]:
+def validate_branch_name(branch: str) -> tuple[bool, str]:
     """
     Validate that a branch name is safe and well-formed.
 
@@ -134,27 +129,26 @@ def validate_branch_name(branch: str) -> Tuple[bool, str]:
         return False, "Branch name contains invalid characters"
 
     # Block names starting with hyphen (could be interpreted as flags)
-    if branch.startswith('-'):
+    if branch.startswith("-"):
         return False, "Branch name must not start with a hyphen"
 
     # Block double dots (git ref traversal)
-    if '..' in branch:
+    if ".." in branch:
         return False, "Branch name must not contain '..'"
 
     # Block .lock suffix (git internal)
-    if branch.endswith('.lock'):
+    if branch.endswith(".lock"):
         return False, "Branch name must not end with '.lock'"
 
     # Block refs/ prefix (raw ref manipulation)
-    if branch.startswith('refs/'):
+    if branch.startswith("refs/"):
         return False, "Branch name must not start with 'refs/'"
 
     # Must match the allowed pattern (alphanumeric, hyphens, underscores,
     # forward slashes, dots)
     if not _BRANCH_NAME_PATTERN.match(branch):
         return False, (
-            "Branch name must contain only letters, numbers, hyphens, "
-            "underscores, forward slashes, and dots"
+            "Branch name must contain only letters, numbers, hyphens, underscores, forward slashes, and dots"
         )
 
     # Reasonable length limit
@@ -164,7 +158,7 @@ def validate_branch_name(branch: str) -> Tuple[bool, str]:
     return True, ""
 
 
-def is_protected_branch(branch: str) -> Tuple[bool, str]:
+def is_protected_branch(branch: str) -> tuple[bool, str]:
     """
     Check if a branch is protected and should not receive direct pushes.
 
@@ -193,7 +187,7 @@ def is_protected_branch(branch: str) -> Tuple[bool, str]:
     return False, ""
 
 
-def validate_push_command_safety(command_args: list) -> Tuple[bool, str]:
+def validate_push_command_safety(command_args: list) -> tuple[bool, str]:
     """
     Defense-in-depth check that a constructed git push command does not
     contain dangerous flags.
@@ -214,7 +208,7 @@ def validate_push_command_safety(command_args: list) -> Tuple[bool, str]:
 
     # Check for colon-prefix deletion syntax (e.g., :branch-name)
     for arg in command_args:
-        if arg.startswith(':') and len(arg) > 1:
+        if arg.startswith(":") and len(arg) > 1:
             return False, f"Remote branch deletion syntax detected: {arg}"
 
     return True, ""

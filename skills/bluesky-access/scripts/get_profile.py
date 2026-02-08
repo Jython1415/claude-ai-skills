@@ -19,7 +19,7 @@ Example:
 
 import os
 import sys
-import json
+
 import requests
 
 
@@ -33,20 +33,17 @@ def get_profile(actor: str) -> dict:
     Returns:
         Profile data
     """
-    session_id = os.environ.get('SESSION_ID')
-    proxy_url = os.environ.get('PROXY_URL')
+    session_id = os.environ.get("SESSION_ID")
+    proxy_url = os.environ.get("PROXY_URL")
 
     if not session_id or not proxy_url:
-        raise ValueError(
-            "SESSION_ID and PROXY_URL environment variables required.\n"
-            "Use MCP create_session tool first."
-        )
+        raise ValueError("SESSION_ID and PROXY_URL environment variables required.\nUse MCP create_session tool first.")
 
     response = requests.get(
         f"{proxy_url}/proxy/bsky/app.bsky.actor.getProfile",
         params={"actor": actor},
         headers={"X-Session-Id": session_id},
-        timeout=30
+        timeout=30,
     )
 
     if response.status_code == 401:
