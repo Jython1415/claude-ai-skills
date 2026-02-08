@@ -3,19 +3,22 @@
 MCP Server for Credential Proxy Session Management
 
 Exposes session management as MCP tools for Claude.ai custom connector.
-Uses Streamable HTTP transport for compatibility with Claude.ai browser.
+Uses Streamable HTTP transport with unified /mcp endpoint.
 
 Authentication: GitHub OAuth with username allowlist
+Transport: Cloudflare Tunnel required (Tailscale Funnel unreachable from Anthropic IPs)
 """
 
 import os
 import sys
 import logging
 import httpx
+import uvicorn
 from functools import wraps
 from typing import Callable, Any
 from fastmcp import FastMCP, Context
 from fastmcp.server.auth.providers.github import GitHubProvider
+from fastmcp.server.dependencies import get_access_token
 
 # Add parent directory to path to import server modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -28,12 +31,12 @@ redactor = get_redactor()
 
 # Configuration
 FLASK_URL = os.environ.get('FLASK_URL', 'http://localhost:8443')
+
 GITHUB_CLIENT_ID = os.environ.get('GITHUB_CLIENT_ID')
 GITHUB_CLIENT_SECRET = os.environ.get('GITHUB_CLIENT_SECRET')
 GITHUB_ALLOWED_USERS = set(os.environ.get('GITHUB_ALLOWED_USERS', '').split(','))
-BASE_URL = os.environ.get('BASE_URL', 'https://ganymede.tail0410a7.ts.net:10000')
+BASE_URL = os.environ.get('BASE_URL', 'https://mcp.joshuashew.com')
 
-# Validate GitHub OAuth configuration
 if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
     logger.error("GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be set!")
     raise ValueError("Missing GitHub OAuth configuration")
@@ -41,19 +44,17 @@ if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
 if not GITHUB_ALLOWED_USERS or GITHUB_ALLOWED_USERS == {''}:
     logger.warning("No GitHub users in allowlist! Set GITHUB_ALLOWED_USERS")
 
-# Create GitHub auth provider
 auth = GitHubProvider(
     client_id=GITHUB_CLIENT_ID,
     client_secret=GITHUB_CLIENT_SECRET,
     base_url=BASE_URL,
-    redirect_path="/oauth/callback"  # Match GitHub OAuth App callback URL
+    redirect_path="/oauth/callback"
 )
 
-# Initialize MCP server with auth
 mcp = FastMCP(
     "credential-proxy",
-    stateless_http=True,  # Important for scalability with remote connections
-    auth=auth  # GitHub OAuth authentication
+    stateless_http=True,
+    auth=auth,
 )
 
 
@@ -61,11 +62,11 @@ def require_allowlist(func: Callable) -> Callable:
     """Decorator to check if authenticated user is in the allowlist."""
     @wraps(func)
     async def wrapper(context: Context, *args, **kwargs) -> Any:
-        # Get authenticated GitHub username
-        user_claims = context.request_context.user
-        github_username = user_claims.get("login", "unknown")
+        access_token = get_access_token()
+        if access_token is None:
+            return {"error": "Authentication required"}
+        github_username = access_token.claims.get("login", "unknown")
 
-        # Check if user is in allowlist
         if github_username not in GITHUB_ALLOWED_USERS:
             logger.warning(f"Access denied for user: {github_username}")
             return {
@@ -106,10 +107,9 @@ async def create_session(context: Context, services: list[str], ttl_minutes: int
         result = create_session(["bsky", "git"], ttl_minutes=60)
         # Use result["session_id"] and result["proxy_url"] in your scripts
     """
-    # Validate TTL
     if ttl_minutes < 1:
         return {"error": "ttl_minutes must be at least 1"}
-    if ttl_minutes > 480:  # 8 hours max
+    if ttl_minutes > 480:
         return {"error": "ttl_minutes cannot exceed 480 (8 hours)"}
 
     try:
@@ -220,14 +220,15 @@ if __name__ == "__main__":
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
 
-    # Default to port 10000 (Tailscale Funnel compatible)
     port = int(os.environ.get('MCP_PORT', 10000))
 
-    logger.info(f"Starting MCP server on port {port}")
+    logger.info(f"MCP Server starting on port {port}")
+    logger.info(f"Transport: Streamable HTTP (/mcp)")
     logger.info(f"Flask backend: {FLASK_URL}")
-    logger.info(f"Authentication: GitHub OAuth")
-    logger.info(f"Allowed GitHub users: {', '.join(sorted(GITHUB_ALLOWED_USERS))}")
-    logger.info(f"OAuth callback URL: {BASE_URL}/oauth/callback")
+    logger.info(f"Base URL: {BASE_URL}")
+    logger.info(f"Auth: GitHub OAuth")
+    logger.info(f"Allowed users: {', '.join(sorted(GITHUB_ALLOWED_USERS))}")
+    logger.info(f"OAuth callback: {BASE_URL}/oauth/callback")
 
-    # Run with FastMCP's built-in server (handles HTTP transport and auth)
-    mcp.run(transport="http", port=port, host="127.0.0.1")
+    app = mcp.http_app(transport="streamable-http")
+    uvicorn.run(app, host="127.0.0.1", port=port)

@@ -1,15 +1,15 @@
 #!/bin/bash
 #
-# Setup LaunchAgents and Tailscale Funnel for Credential Proxy
+# Setup LaunchAgents for Credential Proxy + Cloudflare Tunnel
 #
 # This script configures:
 # 1. LaunchAgents to auto-start Flask proxy and MCP server on login
-# 2. Tailscale Funnel to expose both servers via HTTPS
+# 2. Verifies Cloudflare Tunnel system service is installed
 #
 # Features:
 # - Idempotent: Safe to run multiple times (detects and restarts existing servers)
 # - Validates GitHub OAuth credentials from .env before starting
-# - Verifies both servers started successfully after configuration
+# - Verifies all services started successfully after configuration
 # - Handles graceful shutdown with sleep delays for clean restarts
 #
 # Usage:
@@ -18,11 +18,10 @@
 # Requirements:
 # - .env file with GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_ALLOWED_USERS
 # - uv package manager installed
-# - Tailscale installed (optional, for Funnel setup)
+# - cloudflared system service installed (sudo cloudflared service install <token>)
 #
 # To check status:
 #   launchctl list | grep joshuashew
-#   tailscale funnel status
 #
 # To manually stop/start:
 #   launchctl stop com.joshuashew.credential-proxy
@@ -33,8 +32,7 @@
 #   launchctl unload ~/Library/LaunchAgents/com.joshuashew.mcp-server.plist
 #   rm ~/Library/LaunchAgents/com.joshuashew.credential-proxy.plist
 #   rm ~/Library/LaunchAgents/com.joshuashew.mcp-server.plist
-#   tailscale funnel off 8443
-#   tailscale funnel off 10000
+#   sudo cloudflared service uninstall  # (for the tunnel)
 
 set -e
 
@@ -44,7 +42,7 @@ LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
 LOGS_DIR="$HOME/Library/Logs"
 ENV_FILE="$PROJECT_DIR/.env"
 
-# Ports (10000 is Tailscale Funnel compatible, 8001 is not)
+# Ports
 PROXY_PORT=8443
 MCP_PORT=10000
 
@@ -85,12 +83,12 @@ if [ -z "$GITHUB_CLIENT_ID" ] || [ -z "$GITHUB_CLIENT_SECRET" ]; then
     echo ""
     echo "Steps to configure:"
     echo "1. Go to https://github.com/settings/developers"
-    echo "2. Create new OAuth App with callback: https://ganymede.tail0410a7.ts.net:10000/oauth/callback"
+    echo "2. Create new OAuth App with callback: https://mcp.joshuashew.com/oauth/callback"
     echo "3. Add to .env file:"
     echo "   GITHUB_CLIENT_ID=your-client-id"
     echo "   GITHUB_CLIENT_SECRET=your-client-secret"
     echo "   GITHUB_ALLOWED_USERS=Jython1415"
-    echo "   BASE_URL=https://ganymede.tail0410a7.ts.net:10000"
+    echo "   BASE_URL=https://mcp.joshuashew.com"
     exit 1
 fi
 
@@ -243,7 +241,7 @@ cat > "$MCP_PLIST" << EOF
         <key>GITHUB_ALLOWED_USERS</key>
         <string>$GITHUB_ALLOWED_USERS</string>
         <key>BASE_URL</key>
-        <string>https://ganymede.tail0410a7.ts.net:$MCP_PORT</string>
+        <string>${BASE_URL:-https://mcp.joshuashew.com}</string>
     </dict>
 </dict>
 </plist>
@@ -253,32 +251,35 @@ echo "Loading MCP server LaunchAgent..."
 launchctl load "$MCP_PLIST"
 echo "Done."
 
-# --- Tailscale Funnel ---
+# --- Cloudflare Tunnel ---
 echo ""
 echo "----------------------------------------"
-echo "Setting up Tailscale Funnel"
+echo "Checking Cloudflare Tunnel"
 echo "----------------------------------------"
 
-# Find tailscale binary (check both PATH and macOS app location)
-TAILSCALE_BIN=$(command -v tailscale 2>/dev/null || echo "/Applications/Tailscale.app/Contents/MacOS/Tailscale")
+TUNNEL_LABEL="com.joshuashew.cloudflare-tunnel"
+TUNNEL_PLIST="$LAUNCH_AGENTS_DIR/com.joshuashew.cloudflare-tunnel.plist"
+SYSTEM_TUNNEL_PLIST="/Library/LaunchDaemons/com.cloudflare.cloudflared.plist"
 
-if [ ! -x "$TAILSCALE_BIN" ]; then
-    echo "Warning: tailscale not found"
-    echo "Install Tailscale from https://tailscale.com/download"
-    echo "Then run: tailscale funnel $PROXY_PORT && tailscale funnel $MCP_PORT"
+if [ -f "$SYSTEM_TUNNEL_PLIST" ]; then
+    echo "  Cloudflare Tunnel is managed by system LaunchDaemon"
+    echo "  ($SYSTEM_TUNNEL_PLIST)"
+    echo "  To reinstall: sudo cloudflared service install <token>"
+    # Clean up user-level agent if it exists from a previous setup
+    if [ -f "$TUNNEL_PLIST" ]; then
+        echo "  Removing redundant user-level LaunchAgent..."
+        launchctl unload "$TUNNEL_PLIST" 2>/dev/null || true
+        rm -f "$TUNNEL_PLIST"
+    fi
 else
-    echo "Using tailscale at: $TAILSCALE_BIN"
-
-    # Set up funnel for both ports with --bg flag for persistence
-    echo "Configuring Tailscale Funnel for port $PROXY_PORT..."
-    "$TAILSCALE_BIN" funnel --https=$PROXY_PORT --bg http://127.0.0.1:$PROXY_PORT 2>&1 | grep -v "Press Ctrl+C" || echo "  (configured)"
-
-    echo "Configuring Tailscale Funnel for port $MCP_PORT..."
-    "$TAILSCALE_BIN" funnel --https=$MCP_PORT --bg http://127.0.0.1:$MCP_PORT 2>&1 | grep -v "Press Ctrl+C" || echo "  (configured)"
-
+    echo "  WARNING: No system LaunchDaemon found for cloudflared"
+    echo "  The Cloudflare Tunnel will NOT survive a reboot."
     echo ""
-    echo "Tailscale Funnel status:"
-    "$TAILSCALE_BIN" serve status 2>/dev/null || echo "  (run 'tailscale serve status' to check)"
+    echo "  To fix, run:"
+    echo "    sudo cloudflared service install <token>"
+    echo ""
+    echo "  Get your token from the Cloudflare Zero Trust dashboard:"
+    echo "    Networks > Tunnels > credential-proxy > Configure > Install connector"
 fi
 
 # --- Summary ---
@@ -294,26 +295,24 @@ echo ""
 echo "LaunchAgents installed (auto-start on login):"
 echo "  $PROXY_PLIST"
 echo "  $MCP_PLIST"
+if [ -f "$SYSTEM_TUNNEL_PLIST" ]; then
+echo "  $SYSTEM_TUNNEL_PLIST (system daemon)"
+fi
 echo ""
 echo "Logs:"
 echo "  tail -f ~/Library/Logs/com.joshuashew.credential-proxy.log"
 echo "  tail -f ~/Library/Logs/com.joshuashew.mcp-server.log"
+echo "  tail -f ~/Library/Logs/com.joshuashew.cloudflare-tunnel.log"
 echo ""
 echo "Claude.ai Custom Connector:"
-# Get Tailscale hostname
-TS_HOSTNAME=$(tailscale status --json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['Self']['DNSName'].rstrip('.'))" 2>/dev/null || echo "ganymede.tail0410a7.ts.net")
 echo "  Name: Credential Proxy"
-echo "  URL: https://$TS_HOSTNAME:$MCP_PORT/mcp"
-echo ""
-echo "Advanced Settings (OAuth):"
-echo "  OAuth Client ID: $GITHUB_CLIENT_ID"
-echo "  OAuth Client Secret: (from .env)"
+echo "  URL: ${BASE_URL:-https://mcp.joshuashew.com}/mcp"
+echo "  (OAuth is handled automatically via GitHub — no Advanced Settings needed)"
 echo ""
 echo "Allowed GitHub Users: $GITHUB_ALLOWED_USERS"
 echo ""
 echo "Status commands:"
 echo "  launchctl list | grep joshuashew"
-echo "  tailscale funnel status"
 echo ""
 
 # Verify servers started
@@ -329,4 +328,10 @@ if launchctl list 2>/dev/null | grep -q "$MCP_LABEL"; then
     echo "  ✓ MCP server running"
 else
     echo "  ✗ MCP server NOT running - check logs"
+fi
+
+if pgrep -x cloudflared > /dev/null 2>&1; then
+    echo "  ✓ Cloudflare Tunnel running"
+elif [ -f "$SYSTEM_TUNNEL_PLIST" ]; then
+    echo "  ✗ Cloudflare Tunnel NOT running - check: sudo launchctl list | grep cloudflare"
 fi
