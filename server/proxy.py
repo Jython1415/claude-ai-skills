@@ -6,12 +6,11 @@ Streams responses back to avoid buffering large payloads.
 """
 
 import logging
-import requests
-from flask import Response, stream_with_context
-from typing import Optional
 
+import requests
 from credentials import CredentialStore
 from error_redaction import get_redactor
+from flask import Response, stream_with_context
 
 logger = logging.getLogger(__name__)
 
@@ -20,27 +19,27 @@ redactor = get_redactor()
 
 # Headers that should not be forwarded (hop-by-hop headers)
 HOP_BY_HOP_HEADERS = {
-    'connection',
-    'keep-alive',
-    'proxy-authenticate',
-    'proxy-authorization',
-    'te',
-    'trailer',
-    'transfer-encoding',
-    'upgrade',
-    'host',
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+    "host",
     # Also exclude our custom auth headers
-    'x-session-id',
-    'x-auth-key',
+    "x-session-id",
+    "x-auth-key",
 }
 
 # Response headers that should not be forwarded back
 EXCLUDED_RESPONSE_HEADERS = {
-    'connection',
-    'keep-alive',
-    'transfer-encoding',
-    'content-encoding',  # Let Flask handle encoding
-    'content-length',    # Will be recalculated
+    "connection",
+    "keep-alive",
+    "transfer-encoding",
+    "content-encoding",  # Let Flask handle encoding
+    "content-length",  # Will be recalculated
 }
 
 
@@ -54,10 +53,7 @@ def filter_request_headers(headers: dict) -> dict:
     Returns:
         Filtered headers dict
     """
-    return {
-        k: v for k, v in headers.items()
-        if k.lower() not in HOP_BY_HOP_HEADERS
-    }
+    return {k: v for k, v in headers.items() if k.lower() not in HOP_BY_HOP_HEADERS}
 
 
 def filter_response_headers(headers: dict) -> dict:
@@ -70,10 +66,7 @@ def filter_response_headers(headers: dict) -> dict:
     Returns:
         Filtered headers dict
     """
-    return {
-        k: v for k, v in headers.items()
-        if k.lower() not in EXCLUDED_RESPONSE_HEADERS
-    }
+    return {k: v for k, v in headers.items() if k.lower() not in EXCLUDED_RESPONSE_HEADERS}
 
 
 def forward_request(
@@ -81,9 +74,9 @@ def forward_request(
     path: str,
     method: str,
     headers: dict,
-    body: Optional[bytes],
+    body: bytes | None,
     query_string: str,
-    credential_store: CredentialStore
+    credential_store: CredentialStore,
 ) -> Response:
     """
     Forward a request to an upstream service with credential injection.
@@ -104,14 +97,10 @@ def forward_request(
     cred = credential_store.get(service)
     if cred is None:
         logger.warning(f"Unknown service requested: {service}")
-        return Response(
-            f'{{"error": "unknown service: {service}"}}',
-            status=404,
-            mimetype='application/json'
-        )
+        return Response(f'{{"error": "unknown service: {service}"}}', status=404, mimetype="application/json")
 
     # Build target URL
-    base_url = cred.base_url.rstrip('/')
+    base_url = cred.base_url.rstrip("/")
     target_url = f"{base_url}/{path}"
     if query_string:
         target_url = f"{target_url}?{query_string}"
@@ -127,12 +116,7 @@ def forward_request(
     try:
         # Make upstream request with streaming
         upstream_resp = requests.request(
-            method=method,
-            url=target_url,
-            headers=forward_headers,
-            data=body,
-            stream=True,
-            timeout=60
+            method=method, url=target_url, headers=forward_headers, data=body, stream=True, timeout=60
         )
 
         # Stream response back
@@ -142,24 +126,16 @@ def forward_request(
             stream_with_context(upstream_resp.iter_content(chunk_size=8192)),
             status=upstream_resp.status_code,
             headers=response_headers,
-            content_type=upstream_resp.headers.get('Content-Type', 'application/octet-stream')
+            content_type=upstream_resp.headers.get("Content-Type", "application/octet-stream"),
         )
 
     except requests.exceptions.Timeout:
         logger.error(f"Timeout proxying to {service}/{path}")
-        return Response(
-            '{"error": "upstream timeout"}',
-            status=504,
-            mimetype='application/json'
-        )
+        return Response('{"error": "upstream timeout"}', status=504, mimetype="application/json")
 
     except requests.exceptions.ConnectionError as e:
         logger.error(f"Connection error proxying to {service}/{path}: {e}")
-        return Response(
-            '{"error": "upstream connection failed"}',
-            status=502,
-            mimetype='application/json'
-        )
+        return Response('{"error": "upstream connection failed"}', status=502, mimetype="application/json")
 
     except Exception as e:
         # Log full exception for local debugging
@@ -168,5 +144,5 @@ def forward_request(
         return Response(
             '{"what": "Proxy error occurred", "why": "Request forwarding failed", "action": "Check proxy server logs for details"}',
             status=500,
-            mimetype='application/json'
+            mimetype="application/json",
         )

@@ -9,19 +9,21 @@ Authentication: GitHub OAuth with username allowlist
 Transport: Cloudflare Tunnel required (Tailscale Funnel unreachable from Anthropic IPs)
 """
 
+import logging
 import os
 import sys
-import logging
+from collections.abc import Callable
+from functools import wraps
+from typing import Any
+
 import httpx
 import uvicorn
-from functools import wraps
-from typing import Callable, Any
-from fastmcp import FastMCP, Context
+from fastmcp import Context, FastMCP
 from fastmcp.server.auth.providers.github import GitHubProvider
 from fastmcp.server.dependencies import get_access_token
 
 # Add parent directory to path to import server modules
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from server.error_redaction import get_redactor
 
 logger = logging.getLogger(__name__)
@@ -30,29 +32,26 @@ logger = logging.getLogger(__name__)
 redactor = get_redactor()
 
 # Configuration
-FLASK_URL = os.environ.get('FLASK_URL', 'http://localhost:8443')
-PROXY_SECRET_KEY = os.environ.get('PROXY_SECRET_KEY')
+FLASK_URL = os.environ.get("FLASK_URL", "http://localhost:8443")
+PROXY_SECRET_KEY = os.environ.get("PROXY_SECRET_KEY")
 if not PROXY_SECRET_KEY:
     logger.error("PROXY_SECRET_KEY must be set for Flask API access!")
     raise ValueError("Missing PROXY_SECRET_KEY configuration")
 
-GITHUB_CLIENT_ID = os.environ.get('GITHUB_CLIENT_ID')
-GITHUB_CLIENT_SECRET = os.environ.get('GITHUB_CLIENT_SECRET')
-GITHUB_ALLOWED_USERS = set(os.environ.get('GITHUB_ALLOWED_USERS', '').split(','))
-BASE_URL = os.environ.get('BASE_URL', 'https://mcp.joshuashew.com')
+GITHUB_CLIENT_ID = os.environ.get("GITHUB_CLIENT_ID")
+GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET")
+GITHUB_ALLOWED_USERS = set(os.environ.get("GITHUB_ALLOWED_USERS", "").split(","))
+BASE_URL = os.environ.get("BASE_URL", "https://mcp.joshuashew.com")
 
 if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
     logger.error("GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be set!")
     raise ValueError("Missing GitHub OAuth configuration")
 
-if not GITHUB_ALLOWED_USERS or GITHUB_ALLOWED_USERS == {''}:
+if not GITHUB_ALLOWED_USERS or GITHUB_ALLOWED_USERS == {""}:
     logger.warning("No GitHub users in allowlist! Set GITHUB_ALLOWED_USERS")
 
 auth = GitHubProvider(
-    client_id=GITHUB_CLIENT_ID,
-    client_secret=GITHUB_CLIENT_SECRET,
-    base_url=BASE_URL,
-    redirect_path="/oauth/callback"
+    client_id=GITHUB_CLIENT_ID, client_secret=GITHUB_CLIENT_SECRET, base_url=BASE_URL, redirect_path="/oauth/callback"
 )
 
 mcp = FastMCP(
@@ -64,6 +63,7 @@ mcp = FastMCP(
 
 def require_allowlist(func: Callable) -> Callable:
     """Decorator to check if authenticated user is in the allowlist."""
+
     @wraps(func)
     async def wrapper(context: Context, *args, **kwargs) -> Any:
         access_token = get_access_token()
@@ -75,7 +75,7 @@ def require_allowlist(func: Callable) -> Callable:
             logger.warning(f"Access denied for user: {github_username}")
             return {
                 "error": "Access denied",
-                "message": f"User '{github_username}' is not authorized to use this service"
+                "message": f"User '{github_username}' is not authorized to use this service",
             }
 
         logger.info(f"Authorized user '{github_username}' accessing {func.__name__}")
@@ -122,7 +122,7 @@ async def create_session(context: Context, services: list[str], ttl_minutes: int
                 f"{FLASK_URL}/sessions",
                 json={"services": services, "ttl_minutes": ttl_minutes},
                 headers={"X-Auth-Key": PROXY_SECRET_KEY},
-                timeout=10
+                timeout=10,
             )
 
             if response.status_code == 400:
@@ -160,9 +160,7 @@ async def revoke_session(context: Context, session_id: str) -> dict:
     try:
         async with httpx.AsyncClient() as client:
             response = await client.delete(
-                f"{FLASK_URL}/sessions/{session_id}",
-                headers={"X-Auth-Key": PROXY_SECRET_KEY},
-                timeout=10
+                f"{FLASK_URL}/sessions/{session_id}", headers={"X-Auth-Key": PROXY_SECRET_KEY}, timeout=10
             )
 
             if response.status_code == 404:
@@ -202,11 +200,7 @@ async def list_services(context: Context) -> dict:
     """
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{FLASK_URL}/services",
-                headers={"X-Auth-Key": PROXY_SECRET_KEY},
-                timeout=10
-            )
+            response = await client.get(f"{FLASK_URL}/services", headers={"X-Auth-Key": PROXY_SECRET_KEY}, timeout=10)
             response.raise_for_status()
             return response.json()
 
@@ -222,18 +216,15 @@ async def list_services(context: Context) -> dict:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
-    port = int(os.environ.get('MCP_PORT', 10000))
+    port = int(os.environ.get("MCP_PORT", 10000))
 
     logger.info(f"MCP Server starting on port {port}")
-    logger.info(f"Transport: Streamable HTTP (/mcp)")
+    logger.info("Transport: Streamable HTTP (/mcp)")
     logger.info(f"Flask backend: {FLASK_URL}")
     logger.info(f"Base URL: {BASE_URL}")
-    logger.info(f"Auth: GitHub OAuth")
+    logger.info("Auth: GitHub OAuth")
     logger.info(f"Allowed users: {', '.join(sorted(GITHUB_ALLOWED_USERS))}")
     logger.info(f"OAuth callback: {BASE_URL}/oauth/callback")
 

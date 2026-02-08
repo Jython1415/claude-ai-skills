@@ -8,16 +8,13 @@ Service-aware credential handling with built-in support for:
 """
 
 import json
-import os
 import logging
+import os
 import threading
-import time
 from dataclasses import dataclass, field
-from typing import Optional
 from datetime import datetime, timedelta
 
 import requests
-
 from error_redaction import get_redactor
 
 logger = logging.getLogger(__name__)
@@ -28,20 +25,15 @@ redactor = get_redactor()
 
 # Known service configurations (base URLs, auth flows)
 KNOWN_SERVICES = {
-    "bsky": {
-        "base_url": "https://bsky.social/xrpc",
-        "type": "atproto"
-    },
-    "github_api": {
-        "base_url": "https://api.github.com",
-        "type": "bearer"
-    }
+    "bsky": {"base_url": "https://bsky.social/xrpc", "type": "atproto"},
+    "github_api": {"base_url": "https://api.github.com", "type": "bearer"},
 }
 
 
 @dataclass
 class ATProtoSession:
     """Cached ATProto session with access and refresh tokens."""
+
     access_jwt: str
     refresh_jwt: str
     did: str
@@ -52,18 +44,19 @@ class ATProtoSession:
 @dataclass
 class ServiceCredential:
     """Configuration for a proxied service."""
+
     service_type: str  # "atproto", "bearer", "header", "query"
     base_url: str
 
     # For bearer/header/query types
-    credential: Optional[str] = None
-    auth_header: Optional[str] = None  # For type="header"
-    query_param: Optional[str] = None  # For type="query"
+    credential: str | None = None
+    auth_header: str | None = None  # For type="header"
+    query_param: str | None = None  # For type="query"
 
     # For ATProto type
-    identifier: Optional[str] = None
-    app_password: Optional[str] = None
-    _atproto_session: Optional[ATProtoSession] = field(default=None, repr=False)
+    identifier: str | None = None
+    app_password: str | None = None
+    _atproto_session: ATProtoSession | None = field(default=None, repr=False)
     _session_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def inject_auth(self, headers: dict, url: str) -> tuple[dict, str]:
@@ -104,7 +97,7 @@ class ServiceCredential:
 
         return headers, url
 
-    def _get_atproto_token(self) -> Optional[str]:
+    def _get_atproto_token(self) -> str | None:
         """Get a valid ATProto access token, creating/refreshing session as needed."""
         with self._session_lock:
             now = datetime.utcnow()
@@ -134,11 +127,8 @@ class ServiceCredential:
         try:
             response = requests.post(
                 f"{self.base_url}/com.atproto.server.createSession",
-                json={
-                    "identifier": self.identifier,
-                    "password": self.app_password
-                },
-                timeout=10
+                json={"identifier": self.identifier, "password": self.app_password},
+                timeout=10,
             )
             response.raise_for_status()
             data = response.json()
@@ -149,7 +139,7 @@ class ServiceCredential:
                 refresh_jwt=data["refreshJwt"],
                 did=data["did"],
                 handle=data["handle"],
-                expires_at=datetime.utcnow() + timedelta(hours=2)
+                expires_at=datetime.utcnow() + timedelta(hours=2),
             )
 
             # Track JWTs for redaction in error messages
@@ -172,7 +162,7 @@ class ServiceCredential:
             response = requests.post(
                 f"{self.base_url}/com.atproto.server.refreshSession",
                 headers={"Authorization": f"Bearer {self._atproto_session.refresh_jwt}"},
-                timeout=10
+                timeout=10,
             )
             response.raise_for_status()
             data = response.json()
@@ -182,7 +172,7 @@ class ServiceCredential:
                 refresh_jwt=data["refreshJwt"],
                 did=data["did"],
                 handle=data["handle"],
-                expires_at=datetime.utcnow() + timedelta(hours=2)
+                expires_at=datetime.utcnow() + timedelta(hours=2),
             )
 
             # Track refreshed JWTs for redaction in error messages
@@ -217,7 +207,7 @@ class CredentialStore:
     Custom services can specify full configuration.
     """
 
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: str | None = None):
         """
         Initialize credential store from config file.
 
@@ -252,7 +242,7 @@ class CredentialStore:
 
         try:
             self._last_mtime = os.path.getmtime(self._config_path)
-            with open(self._config_path, 'r') as f:
+            with open(self._config_path) as f:
                 config = json.load(f)
 
             for service_name, service_config in config.items():
@@ -271,7 +261,7 @@ class CredentialStore:
         except Exception as e:
             logger.error(f"Error loading credentials: {e}")
 
-    def _parse_service_config(self, name: str, config: dict) -> Optional[ServiceCredential]:
+    def _parse_service_config(self, name: str, config: dict) -> ServiceCredential | None:
         """Parse a service configuration, using known defaults where applicable."""
 
         # Check if this is a known service
@@ -299,14 +289,12 @@ class CredentialStore:
                 service_type="atproto",
                 base_url=base_url,
                 identifier=config.get("identifier"),
-                app_password=config.get("app_password")
+                app_password=config.get("app_password"),
             )
 
         elif service_type == "bearer":
             return ServiceCredential(
-                service_type="bearer",
-                base_url=base_url,
-                credential=config.get("token") or config.get("credential")
+                service_type="bearer", base_url=base_url, credential=config.get("token") or config.get("credential")
             )
 
         elif service_type == "header":
@@ -314,7 +302,7 @@ class CredentialStore:
                 service_type="header",
                 base_url=base_url,
                 credential=config.get("credential"),
-                auth_header=config.get("auth_header")
+                auth_header=config.get("auth_header"),
             )
 
         elif service_type == "query":
@@ -322,14 +310,14 @@ class CredentialStore:
                 service_type="query",
                 base_url=base_url,
                 credential=config.get("credential"),
-                query_param=config.get("query_param")
+                query_param=config.get("query_param"),
             )
 
         else:
             logger.error(f"Service {name}: unknown service type '{service_type}'")
             return None
 
-    def get(self, service: str) -> Optional[ServiceCredential]:
+    def get(self, service: str) -> ServiceCredential | None:
         """
         Get credential configuration for a service.
 

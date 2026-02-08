@@ -15,10 +15,9 @@ while preserving full details in local logs for debugging.
 """
 
 import json
+import logging
 import os
 from pathlib import Path
-from typing import Set
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +38,7 @@ class CredentialRedactor:
 
     def __init__(self):
         """Initialize the redactor and load credentials from config files."""
-        self.credentials_to_redact: Set[str] = set()
+        self.credentials_to_redact: set[str] = set()
         self._load_credentials()
         logger.info(f"Credential redactor initialized with {len(self.credentials_to_redact)} credentials tracked")
 
@@ -53,14 +52,14 @@ class CredentialRedactor:
 
     def _load_from_credentials_json(self) -> None:
         """Load credentials from credentials.json file."""
-        credentials_path = Path(__file__).parent / 'credentials.json'
+        credentials_path = Path(__file__).parent / "credentials.json"
 
         if not credentials_path.exists():
             logger.warning(f"credentials.json not found at {credentials_path}, skipping credential loading")
             return
 
         try:
-            with open(credentials_path, 'r') as f:
+            with open(credentials_path) as f:
                 credentials = json.load(f)
 
             # Extract all credential values from the JSON structure
@@ -70,8 +69,15 @@ class CredentialRedactor:
                     for key, value in service_config.items():
                         if isinstance(value, str) and len(value) > 0:
                             # Track specific credential fields
-                            if key in ('token', 'credential', 'app_password', 'identifier',
-                                      'auth_token', 'api_key', 'secret'):
+                            if key in (
+                                "token",
+                                "credential",
+                                "app_password",
+                                "identifier",
+                                "auth_token",
+                                "api_key",
+                                "secret",
+                            ):
                                 self.credentials_to_redact.add(value)
 
             logger.info(f"Loaded {len(self.credentials_to_redact)} credentials from credentials.json")
@@ -85,10 +91,10 @@ class CredentialRedactor:
         """Load sensitive environment variables for redaction."""
         # List of environment variables containing credentials
         sensitive_env_vars = [
-            'PROXY_SECRET_KEY',
-            'GITHUB_CLIENT_SECRET',
-            'GITHUB_CLIENT_ID',
-            'GIT_PROXY_KEY',
+            "PROXY_SECRET_KEY",
+            "GITHUB_CLIENT_SECRET",
+            "GITHUB_CLIENT_ID",
+            "GIT_PROXY_KEY",
         ]
 
         for env_var in sensitive_env_vars:
@@ -131,7 +137,7 @@ class CredentialRedactor:
         result = text
         for cred in self.credentials_to_redact:
             if cred and len(cred) > 0:
-                result = result.replace(cred, '[REDACTED]')
+                result = result.replace(cred, "[REDACTED]")
 
         return result
 

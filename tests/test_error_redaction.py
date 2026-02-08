@@ -10,6 +10,7 @@ no false positives.
 """
 
 import pytest
+
 from server.error_redaction import CredentialRedactor
 
 
