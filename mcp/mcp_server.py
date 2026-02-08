@@ -31,6 +31,10 @@ redactor = get_redactor()
 
 # Configuration
 FLASK_URL = os.environ.get('FLASK_URL', 'http://localhost:8443')
+PROXY_SECRET_KEY = os.environ.get('PROXY_SECRET_KEY')
+if not PROXY_SECRET_KEY:
+    logger.error("PROXY_SECRET_KEY must be set for Flask API access!")
+    raise ValueError("Missing PROXY_SECRET_KEY configuration")
 
 GITHUB_CLIENT_ID = os.environ.get('GITHUB_CLIENT_ID')
 GITHUB_CLIENT_SECRET = os.environ.get('GITHUB_CLIENT_SECRET')
@@ -117,6 +121,7 @@ async def create_session(context: Context, services: list[str], ttl_minutes: int
             response = await client.post(
                 f"{FLASK_URL}/sessions",
                 json={"services": services, "ttl_minutes": ttl_minutes},
+                headers={"X-Auth-Key": PROXY_SECRET_KEY},
                 timeout=10
             )
 
@@ -156,6 +161,7 @@ async def revoke_session(context: Context, session_id: str) -> dict:
         async with httpx.AsyncClient() as client:
             response = await client.delete(
                 f"{FLASK_URL}/sessions/{session_id}",
+                headers={"X-Auth-Key": PROXY_SECRET_KEY},
                 timeout=10
             )
 
@@ -198,6 +204,7 @@ async def list_services(context: Context) -> dict:
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{FLASK_URL}/services",
+                headers={"X-Auth-Key": PROXY_SECRET_KEY},
                 timeout=10
             )
             response.raise_for_status()

@@ -101,13 +101,11 @@ def verify_session_or_key(service: str = 'git') -> bool:
 
 @app.route('/health', methods=['GET'])
 def health():
-    """Health check endpoint"""
+    """Health check endpoint (no sensitive data exposed)"""
     return jsonify({
         'status': 'healthy',
         'mode': 'credential-proxy',
-        'timestamp': datetime.now().isoformat(),
-        'services': credential_store.list_services(),
-        'active_sessions': session_store.count()
+        'timestamp': datetime.now().isoformat()
     })
 
 
@@ -122,7 +120,14 @@ def create_session():
 
     Input: {"services": ["bsky", "github", "git"], "ttl_minutes": 30}
     Output: {"session_id": "...", "proxy_url": "...", "expires_in_minutes": 30, "services": [...]}
+
+    Requires X-Auth-Key header (admin-only: MCP server creates sessions on behalf of users).
     """
+    auth_key = request.headers.get('X-Auth-Key')
+    if not verify_auth(auth_key):
+        logger.warning(f"Unauthorized session creation attempt from {request.remote_addr}")
+        return jsonify({'error': 'unauthorized'}), 401
+
     data = request.json or {}
     services = data.get('services', [])
     ttl_minutes = data.get('ttl_minutes', 30)
@@ -159,7 +164,12 @@ def create_session():
 
 @app.route('/sessions/<session_id>', methods=['DELETE'])
 def revoke_session(session_id: str):
-    """Revoke a session."""
+    """Revoke a session. Requires X-Auth-Key header."""
+    auth_key = request.headers.get('X-Auth-Key')
+    if not verify_auth(auth_key):
+        logger.warning(f"Unauthorized session revocation attempt from {request.remote_addr}")
+        return jsonify({'error': 'unauthorized'}), 401
+
     if session_store.revoke(session_id):
         logger.info(f"Revoked session {session_id[:8]}...")
         return jsonify({'status': 'revoked'})
@@ -168,7 +178,11 @@ def revoke_session(session_id: str):
 
 @app.route('/services', methods=['GET'])
 def list_services():
-    """List available services that can be included in sessions."""
+    """List available services. Requires X-Auth-Key header."""
+    auth_key = request.headers.get('X-Auth-Key')
+    if not verify_auth(auth_key):
+        return jsonify({'error': 'unauthorized'}), 401
+
     services = credential_store.list_services()
     # Always include 'git' as a pseudo-service
     if 'git' not in services:

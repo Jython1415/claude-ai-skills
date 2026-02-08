@@ -97,6 +97,12 @@ if [ -z "$GITHUB_ALLOWED_USERS" ]; then
     echo "Add to .env file: GITHUB_ALLOWED_USERS=Jython1415"
 fi
 
+if [ -z "$PROXY_SECRET_KEY" ]; then
+    echo "ERROR: PROXY_SECRET_KEY must be set in .env"
+    echo "Generate with: openssl rand -hex 32"
+    exit 1
+fi
+
 echo "GitHub OAuth Configuration:"
 echo "  Client ID: $GITHUB_CLIENT_ID"
 echo "  Allowed Users: $GITHUB_ALLOWED_USERS"
@@ -242,6 +248,8 @@ cat > "$MCP_PLIST" << EOF
         <string>$GITHUB_ALLOWED_USERS</string>
         <key>BASE_URL</key>
         <string>${BASE_URL:-https://mcp.joshuashew.com}</string>
+        <key>PROXY_SECRET_KEY</key>
+        <string>$PROXY_SECRET_KEY</string>
     </dict>
 </dict>
 </plist>
