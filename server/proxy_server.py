@@ -47,6 +47,9 @@ if not SECRET_KEY:
     logger.warning("PROXY_SECRET_KEY not set! Using insecure default.")
     SECRET_KEY = 'CHANGE-ME-INSECURE'
 
+# Public URL for proxy (returned to Claude.ai scripts in session responses)
+PUBLIC_PROXY_URL = os.environ.get('PUBLIC_PROXY_URL', 'https://proxy.joshuashew.com')
+
 # Detect gh CLI at startup
 GH_PATH = shutil.which('gh')
 if not GH_PATH:
@@ -141,9 +144,8 @@ def create_session():
 
     session = session_store.create(services, ttl_minutes)
 
-    # Build proxy URL from request host
-    scheme = 'https' if request.is_secure else 'http'
-    proxy_url = f"{scheme}://{request.host}"
+    # Use configured public URL (request.host resolves to localhost for internal callers)
+    proxy_url = PUBLIC_PROXY_URL
 
     logger.info(f"Created session {session.session_id[:8]}... for services: {services}")
 
