@@ -18,11 +18,12 @@ if [ "$EVENT_NAME" = "push" ]; then
     SKILL_NAME=$(echo "$VERSION_FILE" | sed 's|skills/\([^/]*\)/VERSION|\1|')
     echo "Detected skill from VERSION change: $SKILL_NAME"
 elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-    # For manual triggers, require skill name as input
-    # TODO: Add skill_name input to workflow
-    echo "Error: Manual workflow dispatch not yet supported for multi-skill"
-    echo "Please specify which skill to release"
-    exit 1
+    if [ -z "$SKILL_NAME_INPUT" ]; then
+        echo "Error: skill_name input is required for manual dispatch"
+        exit 1
+    fi
+    SKILL_NAME="$SKILL_NAME_INPUT"
+    echo "Manual release for skill: $SKILL_NAME"
 else
     echo "Error: Unsupported event type: $EVENT_NAME"
     exit 1
