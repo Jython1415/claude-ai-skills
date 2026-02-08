@@ -8,6 +8,14 @@ on:
       - 'skills/*/VERSION'
   workflow_dispatch:
     inputs:
+      skill_name:
+        description: 'Skill to release (e.g., git-proxy, bluesky-access, sift)'
+        required: true
+        type: choice
+        options:
+          - git-proxy
+          - bluesky-access
+          - sift
       version:
         description: 'Version to release (e.g., 1.0.0) - overrides VERSION file'
         required: false
@@ -31,6 +39,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           REPOSITORY: ${{ github.repository }}
           VERSION_OVERRIDE: ${{ github.event.inputs.version }}
+          SKILL_NAME_INPUT: ${{ github.event.inputs.skill_name }}
         run: |
           chmod +x .github/scripts/release-skill.sh
           .github/scripts/release-skill.sh
