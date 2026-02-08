@@ -60,3 +60,4 @@ skills/*-skill.zip
 # Temporary files
 _temp_*
 tmp/
+*.har

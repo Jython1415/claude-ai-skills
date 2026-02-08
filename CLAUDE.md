@@ -30,8 +30,9 @@ Claude.ai
 
 ### MCP Server (`mcp/`)
 - `server.py` - FastMCP server with `create_session`, `revoke_session`, `list_services`
-- Runs on port 10000 with Streamable HTTP transport (Tailscale Funnel compatible)
+- Runs on port 10000 with Streamable HTTP transport via Cloudflare Tunnel
 - Uses GitHub OAuth with username allowlist (set `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_ALLOWED_USERS` env vars)
+- No custom middleware needed -- uses default FastMCP directly
 
 ### Skills (`skills/`)
 - `git-proxy/` - Git bundle proxy skill (Python library + packaging)
@@ -83,7 +84,7 @@ DEBUG=false
 GITHUB_CLIENT_ID=<github-oauth-app-client-id>
 GITHUB_CLIENT_SECRET=<github-oauth-app-secret>
 GITHUB_ALLOWED_USERS=Jython1415,other-username
-BASE_URL=https://ganymede.tail0410a7.ts.net:10000
+BASE_URL=https://mcp.joshuashew.com
 ```
 
 **Service Credentials (`server/credentials.json`):**
@@ -112,7 +113,7 @@ FLASK_URL=http://localhost:8443 uv run python mcp/server.py
 
 ## LaunchAgent Setup
 
-Both servers auto-start on login via LaunchAgents:
+All three services (Flask proxy, MCP server, Cloudflare Tunnel) auto-start on login via LaunchAgents:
 
 ```bash
 # Install (one-time) or restart servers
@@ -124,6 +125,7 @@ launchctl list | grep joshuashew
 # Logs
 tail -f ~/Library/Logs/com.joshuashew.credential-proxy.log
 tail -f ~/Library/Logs/com.joshuashew.mcp-server.log
+tail -f ~/Library/Logs/com.joshuashew.cloudflare-tunnel.log
 ```
 
 **Important for Claude Code:**
@@ -132,13 +134,16 @@ tail -f ~/Library/Logs/com.joshuashew.mcp-server.log
 - If servers need restarting, ask the user to run: `./scripts/setup-launchagents.sh`
 - The script is idempotent - safe to run multiple times (detects and restarts existing servers)
 
-## Tailscale Funnel
+## Cloudflare Tunnel
 
-```bash
-# Expose both servers
-tailscale funnel --bg 8443
-tailscale funnel --bg 10000
-```
+The MCP server is exposed via Cloudflare Tunnel (dashboard-managed).
+The tunnel connector runs as a system LaunchDaemon (`com.cloudflare.cloudflared`),
+installed via `sudo cloudflared service install <token>`.
+Wildcard DNS `*.joshuashew.com` routes through the tunnel.
+
+**Important:** Cloudflare's "Block AI Bots" setting (Security -> Bots) must be
+disabled for the zone. It silently blocks Claude.ai's backend requests
+(`python-httpx` User-Agent) through the tunnel.
 
 ## Dependencies
 
@@ -154,7 +159,12 @@ Managed via `pyproject.toml` and uv:
 - **Credentials Protection**: API credentials never leave the proxy server
 - **Session Management**: Sessions expire automatically (default 30 min)
 - **Service Isolation**: Sessions grant access to specific services only
-- **Transport Security**: Tailscale Funnel provides encrypted HTTPS tunnel
+- **Transport Security**: Cloudflare Tunnel provides encrypted HTTPS tunnel
+
+## Core Requirements
+
+### Local Server Requirement
+The MCP server must run locally on the user's machine, not on cloud infrastructure like Cloudflare Workers. This is a non-negotiable requirement for the credential proxy architecture - credentials must stay on the local machine.
 
 ## Service Configuration
 
