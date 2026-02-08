@@ -24,6 +24,7 @@ from credentials import CredentialStore
 from proxy import forward_request
 from error_redaction import get_redactor
 from error_utils import error_response
+from audit_log import get_audit_log
 
 # Load .env file if it exists
 try:
@@ -64,8 +65,9 @@ if GH_PATH:
 else:
     logger.warning("GitHub CLI (gh) not found - PR creation will fail")
 
-# Initialize session and credential stores
-session_store = SessionStore()
+# Initialize audit log, session store (with expiry callback), and credential store
+audit_log = get_audit_log()
+session_store = SessionStore(on_session_expired=lambda sid: audit_log.session_expired(sid))
 credential_store = CredentialStore()
 
 # Initialize credential redactor for sanitizing error messages
@@ -148,6 +150,7 @@ def create_session():
         }), 400
 
     session = session_store.create(services, ttl_minutes)
+    audit_log.session_created(session.session_id, services, ttl_minutes)
 
     # Use configured public URL (request.host resolves to localhost for internal callers)
     proxy_url = PUBLIC_PROXY_URL
@@ -171,6 +174,7 @@ def revoke_session(session_id: str):
         return jsonify({'error': 'unauthorized'}), 401
 
     if session_store.revoke(session_id):
+        audit_log.session_revoked(session_id)
         logger.info(f"Revoked session {session_id[:8]}...")
         return jsonify({'status': 'revoked'})
     return jsonify({'error': 'session not found'}), 404
@@ -223,7 +227,13 @@ def proxy_request(service: str, rest: str):
             'session_services': session.services
         }), 403
 
-    return forward_request(
+    # Build upstream URL for audit logging (before credential injection)
+    cred = credential_store.get(service)
+    upstream_url = f"{cred.base_url}/{rest}" if cred else f"unknown/{rest}"
+    if request.query_string:
+        upstream_url += f"?{request.query_string.decode()}"
+
+    response = forward_request(
         service=service,
         path=rest,
         method=request.method,
@@ -232,6 +242,17 @@ def proxy_request(service: str, rest: str):
         query_string=request.query_string.decode(),
         credential_store=credential_store
     )
+
+    audit_log.proxy_request(
+        session_id=session_id,
+        service=service,
+        method=request.method,
+        path=rest,
+        upstream_url=upstream_url,
+        status_code=response.status_code,
+    )
+
+    return response
 
 
 # =============================================================================
@@ -253,6 +274,7 @@ def fetch_bundle():
     # Verify authentication (session or legacy key)
     if not verify_session_or_key('git'):
         logger.warning("Unauthorized fetch-bundle attempt")
+        audit_log.git_fetch(session_id=request.headers.get('X-Session-Id'), repo_url="unknown", status_code=401)
         return jsonify({'error': 'unauthorized'}), 401
 
     repo_url = None
@@ -328,6 +350,7 @@ def fetch_bundle():
                 )
 
             logger.info(f"Bundle created successfully, temp repo cleaned up")
+            audit_log.git_fetch(session_id=request.headers.get('X-Session-Id'), repo_url=repo_url, status_code=200)
 
             # Return bundle file (temp bundle file will be cleaned up by Flask after sending)
             return send_file(
@@ -339,12 +362,12 @@ def fetch_bundle():
 
     except subprocess.TimeoutExpired:
         logger.error(f"Timeout while fetching bundle for {repo_url}")
+        audit_log.git_fetch(session_id=request.headers.get('X-Session-Id'), repo_url=repo_url or "unknown", status_code=408)
         return jsonify({'error': 'operation timeout'}), 408
 
     except Exception as e:
-        # Log full exception for local debugging
         logger.error(f"Error creating bundle: {e}")
-        # Return generic error to client (don't expose exception details)
+        audit_log.git_fetch(session_id=request.headers.get('X-Session-Id'), repo_url=repo_url or "unknown", status_code=500)
         return error_response(
             what="Bundle operation failed",
             why="An unexpected error occurred",
@@ -374,6 +397,7 @@ def push_bundle():
     # Verify authentication (session or legacy key)
     if not verify_session_or_key('git'):
         logger.warning("Unauthorized push-bundle attempt")
+        audit_log.git_push(session_id=request.headers.get('X-Session-Id'), repo_url="unknown", branch="unknown", status_code=401)
         return jsonify({'error': 'unauthorized'}), 401
 
     repo_url = None
@@ -555,16 +579,21 @@ def push_bundle():
                             pass
 
             logger.info(f"Push complete, temp repo cleaned up")
+            audit_log.git_push(
+                session_id=request.headers.get('X-Session-Id'),
+                repo_url=repo_url, branch=branch, status_code=200,
+                pr_url=response.get('pr_url'),
+            )
             return jsonify(response)
 
     except subprocess.TimeoutExpired:
         logger.error(f"Timeout while pushing bundle for {repo_url} {branch}")
+        audit_log.git_push(session_id=request.headers.get('X-Session-Id'), repo_url=repo_url or "unknown", branch=branch or "unknown", status_code=408)
         return jsonify({'error': 'operation timeout'}), 408
 
     except Exception as e:
-        # Log full exception for local debugging
         logger.error(f"Error pushing bundle: {e}")
-        # Return generic error to client (don't expose exception details)
+        audit_log.git_push(session_id=request.headers.get('X-Session-Id'), repo_url=repo_url or "unknown", branch=branch or "unknown", status_code=500)
         return error_response(
             what="Push operation failed",
             why="An unexpected error occurred",

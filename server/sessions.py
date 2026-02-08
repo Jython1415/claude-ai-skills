@@ -42,9 +42,10 @@ class SessionStore:
     Use cleanup_expired() for periodic cleanup if needed.
     """
 
-    def __init__(self):
+    def __init__(self, on_session_expired=None):
         self._sessions: dict[str, Session] = {}
         self._lock = threading.Lock()
+        self._on_session_expired = on_session_expired
 
     def create(self, services: list[str], ttl_minutes: int = 30) -> Session:
         """
@@ -89,8 +90,9 @@ class SessionStore:
                 return None
 
             if session.is_expired():
-                # Lazy cleanup of expired session
                 del self._sessions[session_id]
+                if self._on_session_expired:
+                    self._on_session_expired(session_id)
                 return None
 
             return session
@@ -147,6 +149,8 @@ class SessionStore:
             ]
             for sid in expired_ids:
                 del self._sessions[sid]
+                if self._on_session_expired:
+                    self._on_session_expired(sid)
                 removed += 1
 
         return removed
