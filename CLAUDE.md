@@ -79,6 +79,7 @@ Git endpoints accept either auth method.
 PROXY_SECRET_KEY=<legacy-auth-key>
 PORT=8443
 DEBUG=false
+PUBLIC_PROXY_URL=https://proxy.joshuashew.com
 
 # GitHub OAuth for MCP Server
 GITHUB_CLIENT_ID=<github-oauth-app-client-id>
@@ -91,12 +92,17 @@ BASE_URL=https://mcp.joshuashew.com
 ```json
 {
   "bsky": {
-    "base_url": "https://bsky.social/xrpc",
-    "auth_type": "bearer",
-    "credential": "your-app-password"
+    "identifier": "handle.bsky.social",
+    "app_password": "xxxx-xxxx-xxxx-xxxx"
+  },
+  "github_api": {
+    "token": "ghp_..."
   }
 }
 ```
+
+Known services (`bsky`, `github_api`) have hardcoded base URLs and auth types
+in `credentials.py`. Custom services need explicit `base_url` and `type` fields.
 
 ## Running Locally
 
@@ -108,7 +114,7 @@ uv sync
 uv run python server/proxy_server.py
 
 # Start MCP server (separate terminal)
-FLASK_URL=http://localhost:8443 uv run python mcp/server.py
+FLASK_URL=http://localhost:8443 uv run python mcp/mcp_server.py
 ```
 
 ## LaunchAgent Setup

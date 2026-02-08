@@ -208,7 +208,7 @@ cat > "$MCP_PLIST" << EOF
         <string>run</string>
         <string>--frozen</string>
         <string>python</string>
-        <string>$PROJECT_DIR/mcp/server.py</string>
+        <string>$PROJECT_DIR/mcp/mcp_server.py</string>
     </array>
 
     <key>WorkingDirectory</key>

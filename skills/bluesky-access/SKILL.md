@@ -20,7 +20,7 @@ Before using this skill, create a session using the MCP tools:
 Use create_session with services: ["bsky"]
 ```
 
-This returns `session_id` and `proxy_url` - set these as environment variables for scripts.
+This returns `session_id` and `proxy_url` (a public HTTPS URL via Cloudflare Tunnel, e.g., `https://proxy.joshuashew.com`) - set these as environment variables for scripts.
 
 ## Environment Variables
 
@@ -29,7 +29,7 @@ Scripts expect these environment variables (provided by MCP session):
 | Variable | Description |
 |----------|-------------|
 | `SESSION_ID` | Session ID from create_session |
-| `PROXY_URL` | Proxy URL from create_session |
+| `PROXY_URL` | Public proxy URL from create_session (Cloudflare Tunnel URL) |
 
 ## Usage Examples
 
