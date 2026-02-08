@@ -139,7 +139,6 @@ class SessionStore:
         Returns:
             Number of expired sessions removed
         """
-        datetime.now()
         removed = 0
 
         with self._lock:
@@ -155,7 +154,6 @@ class SessionStore:
     def count(self) -> int:
         """Get the number of active (non-expired) sessions."""
         with self._lock:
-            datetime.now()
             return sum(1 for session in self._sessions.values() if not session.is_expired())
 
     def list_sessions(self) -> list[dict]:
