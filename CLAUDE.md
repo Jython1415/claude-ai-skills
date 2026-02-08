@@ -26,6 +26,7 @@ Claude.ai
 - `sessions.py` - In-memory session store with TTL
 - `credentials.py` - Loads service configs from JSON
 - `proxy.py` - Transparent HTTP forwarding with credential injection
+- `audit_log.py` - JSON Lines audit logger for session lifecycle, proxy requests, and git operations
 - `credentials.json` - Your API credentials (gitignored)
 
 ### MCP Server (`mcp/`)
@@ -41,34 +42,43 @@ Claude.ai
 
 ## Authentication
 
-**Session-based (new):**
+**Admin key (`X-Auth-Key: PROXY_SECRET_KEY`):**
+
+Session management endpoints (`/sessions`, `/services`) require the `X-Auth-Key` header
+with the value of `PROXY_SECRET_KEY`. The MCP server passes this key automatically when
+calling the Flask API on behalf of authenticated users.
+
+**Session-based (`X-Session-Id`):**
 ```python
-# MCP creates session
+# MCP creates session (passes X-Auth-Key internally)
 session = create_session(["bsky", "git"], ttl_minutes=30)
 
-# Scripts use session_id
+# Scripts use session_id for proxy and git endpoints
 headers = {"X-Session-Id": session["session_id"]}
 requests.get(f"{session['proxy_url']}/proxy/bsky/...", headers=headers)
 ```
 
-**Legacy key-based (still supported):**
+**Legacy key-based (still supported for git endpoints):**
 ```python
 headers = {"X-Auth-Key": os.environ["GIT_PROXY_KEY"]}
 ```
 
-Git endpoints accept either auth method.
+Git endpoints accept either session or key auth. Proxy endpoints require session auth only.
 
 ## Endpoints
 
-### Session Management
+### Health
+- `GET /health` - Health check (unauthenticated, no sensitive data exposed)
+
+### Session Management (require `X-Auth-Key` header)
 - `POST /sessions` - Create session with services list
 - `DELETE /sessions/<id>` - Revoke session
 - `GET /services` - List available services
 
-### Transparent Proxy
+### Transparent Proxy (require `X-Session-Id` header)
 - `ANY /proxy/<service>/<path>` - Forward to upstream with credentials
 
-### Git Operations
+### Git Operations (require `X-Session-Id` or `X-Auth-Key`)
 - `POST /git/fetch-bundle` - Clone repo, return bundle
 - `POST /git/push-bundle` - Apply bundle, push, create PR
 
@@ -76,7 +86,7 @@ Git endpoints accept either auth method.
 
 **Server `.env`:**
 ```
-PROXY_SECRET_KEY=<legacy-auth-key>
+PROXY_SECRET_KEY=<shared-secret-key>   # Required by both Flask and MCP server
 PORT=8443
 DEBUG=false
 PUBLIC_PROXY_URL=https://proxy.joshuashew.com
@@ -87,6 +97,10 @@ GITHUB_CLIENT_SECRET=<github-oauth-app-secret>
 GITHUB_ALLOWED_USERS=Jython1415,other-username
 BASE_URL=https://mcp.joshuashew.com
 ```
+
+`PROXY_SECRET_KEY` is required for both servers. The Flask server uses it to
+authenticate admin requests. The MCP server uses it to authorize its calls to
+the Flask API. The setup script validates this key is set before starting services.
 
 **Service Credentials (`server/credentials.json`):**
 ```json
@@ -132,6 +146,9 @@ launchctl list | grep joshuashew
 tail -f ~/Library/Logs/com.joshuashew.credential-proxy.log
 tail -f ~/Library/Logs/com.joshuashew.mcp-server.log
 tail -f ~/Library/Logs/com.joshuashew.cloudflare-tunnel.log
+
+# Audit log (JSON Lines — session lifecycle, proxy requests, git operations)
+tail -f ~/Library/Logs/credential-proxy-audit.jsonl
 ```
 
 **Important for Claude Code:**
@@ -139,6 +156,7 @@ tail -f ~/Library/Logs/com.joshuashew.cloudflare-tunnel.log
 - Claude cannot execute this script due to launchctl permissions
 - If servers need restarting, ask the user to run: `./scripts/setup-launchagents.sh`
 - The script is idempotent - safe to run multiple times (detects and restarts existing servers)
+- The script validates `PROXY_SECRET_KEY` is set before starting services
 
 ## Cloudflare Tunnel
 
@@ -162,10 +180,12 @@ Managed via `pyproject.toml` and uv:
 
 - **MCP Authentication**: GitHub OAuth with username allowlist
 - **Access Control**: Only specified GitHub usernames can access MCP tools
+- **Admin Endpoints**: Session management and service listing require `X-Auth-Key` header
 - **Credentials Protection**: API credentials never leave the proxy server
 - **Session Management**: Sessions expire automatically (default 30 min)
 - **Service Isolation**: Sessions grant access to specific services only
 - **Transport Security**: Cloudflare Tunnel provides encrypted HTTPS tunnel
+- **Audit Logging**: All session lifecycle events, proxy requests, and git operations logged to `~/Library/Logs/credential-proxy-audit.jsonl`
 
 ## Core Requirements
 

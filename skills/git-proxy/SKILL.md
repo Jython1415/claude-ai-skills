@@ -150,7 +150,7 @@ Clone a repository and return it as a git bundle.
 
 **Response:** Binary git bundle file
 
-**Auth:** `X-Session-Id` header (with `git` service) or `X-Auth-Key` header
+**Auth:** `X-Session-Id` header (recommended) or `X-Auth-Key` header (legacy)
 
 ### POST /git/push-bundle
 
@@ -174,7 +174,7 @@ Apply a git bundle and push to GitHub. Optionally create a PR.
 }
 ```
 
-**Auth:** `X-Session-Id` header (with `git` service) or `X-Auth-Key` header
+**Auth:** `X-Session-Id` header (recommended) or `X-Auth-Key` header (legacy)
 
 ## Critical: Bundle Creation
 
