@@ -25,6 +25,7 @@ from proxy import forward_request
 from error_redaction import get_redactor
 from error_utils import error_response
 from audit_log import get_audit_log
+from git_safety import validate_repo_url, validate_branch_name, is_protected_branch, validate_push_command_safety
 
 # Load .env file if it exists
 try:
@@ -286,6 +287,18 @@ def fetch_bundle():
         if not repo_url:
             return jsonify({'error': 'missing repo_url'}), 400
 
+        # Validate repo URL for safety before any git operations
+        url_valid, url_error = validate_repo_url(repo_url)
+        if not url_valid:
+            logger.warning(f"Fetch rejected - invalid repo URL: {url_error}")
+            return error_response(
+                what="Invalid repository URL",
+                why=url_error,
+                action="Use a valid GitHub URL (https://github.com/owner/repo)",
+                code="GIT_SAFETY_INVALID_URL",
+                status=400
+            )
+
         repo_name = repo_url.rstrip('/').split('/')[-1].replace('.git', '')
         logger.info(f"Fetching bundle for {repo_url}")
 
@@ -415,6 +428,40 @@ def push_bundle():
         if not repo_url or not branch:
             return jsonify({'error': 'missing repo_url or branch'}), 400
 
+        # Validate inputs for safety before any git operations
+        url_valid, url_error = validate_repo_url(repo_url)
+        if not url_valid:
+            logger.warning(f"Push rejected - invalid repo URL: {url_error}")
+            return error_response(
+                what="Invalid repository URL",
+                why=url_error,
+                action="Use a valid GitHub URL (https://github.com/owner/repo)",
+                code="GIT_SAFETY_INVALID_URL",
+                status=400
+            )
+
+        branch_valid, branch_error = validate_branch_name(branch)
+        if not branch_valid:
+            logger.warning(f"Push rejected - invalid branch name: {branch_error}")
+            return error_response(
+                what="Invalid branch name",
+                why=branch_error,
+                action="Use a branch name with only letters, numbers, hyphens, underscores, and forward slashes",
+                code="GIT_SAFETY_INVALID_BRANCH",
+                status=400
+            )
+
+        protected, protected_error = is_protected_branch(branch)
+        if protected:
+            logger.warning(f"Push rejected - protected branch: {branch}")
+            return error_response(
+                what=f"Direct push to '{branch}' is not allowed",
+                why=protected_error,
+                action="Push to a feature branch and create a pull request instead",
+                code="GIT_SAFETY_PROTECTED_BRANCH",
+                status=403
+            )
+
         # Get bundle file
         if 'bundle' not in request.files:
             return jsonify({'error': 'missing bundle file'}), 400
@@ -486,10 +533,22 @@ def push_bundle():
                     status=500
                 )
 
-            # Push branch to remote
+            # Push branch to remote (defense-in-depth: verify command safety)
+            push_cmd = ['git', 'push', 'origin', branch]
+            cmd_safe, cmd_error = validate_push_command_safety(push_cmd)
+            if not cmd_safe:
+                logger.error(f"SAFETY: Push command failed internal safety check: {cmd_error}")
+                return error_response(
+                    what="Push blocked by safety check",
+                    why=cmd_error,
+                    action="This is a server-side safety error. Contact the administrator.",
+                    code="GIT_SAFETY_DANGEROUS_COMMAND",
+                    status=403
+                )
+
             logger.info(f"Pushing {branch} to origin")
             result = subprocess.run(
-                ['git', 'push', 'origin', branch],
+                push_cmd,
                 cwd=repo_path,
                 capture_output=True,
                 timeout=60,
