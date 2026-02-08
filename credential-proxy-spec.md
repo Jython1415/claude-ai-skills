@@ -1,5 +1,7 @@
 # Credential Proxy + Skills Architecture
 
+> **Note:** This project was originally named `claude-credential-proxy` and has since been renamed to `claude-ai-skills`. References to the old name in this document are preserved for historical accuracy.
+
 **Authorship note:** This document was drafted by Claude (Opus 4.5) during a conversation with Joshua on 2024-12-27. These are design ideas we iterated on together, not battle-tested patterns. Treat this as a starting point for implementation, not a specification to follow blindly. If something seems wrong or overcomplicated when you're implementing it, it probably is.
 
 **Source conversation:** The thinking behind these decisions is in the chat history. If the rationale for something isn't clear, ask rather than guess.

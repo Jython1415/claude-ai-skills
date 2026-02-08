@@ -1,8 +1,8 @@
-# Claude Credential Proxy - Technical Reference
+# Claude AI Skills - Technical Reference
 
 ## Project Purpose
 
-Credential proxy enabling Claude.ai to access APIs and clone repositories without exposing credentials. Credentials stay on your Mac; Claude only gets time-limited session tokens.
+A collection of skills for Claude.ai, powered by a credential proxy that lets Claude access APIs and clone repositories without exposing credentials. Credentials stay on your Mac; Claude only gets time-limited session tokens.
 
 ## Architecture
 
