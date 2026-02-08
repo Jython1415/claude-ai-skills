@@ -114,7 +114,7 @@ uv sync
 uv run python server/proxy_server.py
 
 # Start MCP server (separate terminal)
-FLASK_URL=http://localhost:8443 uv run python mcp/server.py
+FLASK_URL=http://localhost:8443 uv run python mcp/mcp_server.py
 ```
 
 ## LaunchAgent Setup
