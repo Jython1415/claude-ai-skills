@@ -91,6 +91,9 @@ launchctl list | grep joshuashew
 tail -f ~/Library/Logs/com.joshuashew.credential-proxy.log
 tail -f ~/Library/Logs/com.joshuashew.mcp-server.log
 tail -f ~/Library/Logs/com.joshuashew.cloudflare-tunnel.log
+
+# Audit log (JSON Lines — session lifecycle, proxy requests, git operations)
+tail -f ~/Library/Logs/credential-proxy-audit.jsonl
 ```
 
 If the Cloudflare Tunnel system service is missing (e.g. after `brew upgrade cloudflared`),

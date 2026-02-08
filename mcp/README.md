@@ -45,6 +45,7 @@ list_services()
 | `FLASK_URL` | `http://localhost:8443` | Flask server URL |
 | `MCP_PORT` | `10000` | MCP server port |
 | `BASE_URL` | `https://mcp.joshuashew.com` | Public URL via Cloudflare Tunnel |
+| `PROXY_SECRET_KEY` | — | **Required.** Shared secret for Flask API auth (`X-Auth-Key` header) |
 | `GITHUB_CLIENT_ID` | — | GitHub OAuth App client ID |
 | `GITHUB_CLIENT_SECRET` | — | GitHub OAuth App client secret |
 | `GITHUB_ALLOWED_USERS` | — | Comma-separated GitHub usernames |

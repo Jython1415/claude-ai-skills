@@ -110,7 +110,7 @@ class GitProxyClient:
 
         Example:
             # After making changes and creating bundle:
-            # git bundle create changes.bundle origin/main..HEAD
+            # git bundle create changes.bundle origin/main..feature/my-branch
             result = client.push_bundle(
                 'changes.bundle',
                 'https://github.com/user/repo.git',
