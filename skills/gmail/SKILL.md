@@ -30,6 +30,38 @@ Scripts expect these environment variables (provided by MCP session):
 |----------|-------------|
 | `SESSION_ID` | Session ID from create_session |
 | `PROXY_URL` | Public proxy URL from create_session (Cloudflare Tunnel URL) |
+| `GMAIL_SERVICE` | Service name for Gmail account (default: `gmail`) |
+
+## Multi-Account Support
+
+Multiple Gmail accounts can be configured with custom service names (e.g., `gmail_personal`, `gmail_work`).
+
+### Managing Accounts
+
+```bash
+# Add a new account (interactive — enter a custom service name when prompted)
+python scripts/google_oauth_setup.py
+
+# Rename an existing account
+python scripts/google_oauth_setup.py --rename gmail gmail_personal
+
+# Remove an account
+python scripts/google_oauth_setup.py --remove gmail_work
+```
+
+### Using a Specific Account
+
+Set the `GMAIL_SERVICE` environment variable to target a non-default account:
+
+```bash
+GMAIL_SERVICE=gmail_work SESSION_ID=abc123 PROXY_URL=https://proxy.example.com python list_messages.py
+```
+
+When creating a session, include the specific service name:
+
+```
+Use create_session with services: ["gmail_work"]
+```
 
 ## Usage Examples
 
@@ -107,6 +139,8 @@ print(response.json())
 ## Available Endpoints
 
 All Gmail API v1 endpoints are available via `/proxy/gmail/gmail/v1/users/me/...`. Common ones:
+
+> **Note:** For non-default accounts, substitute the service name in the proxy path (e.g., `/proxy/gmail_work/gmail/v1/users/me/...` instead of `/proxy/gmail/gmail/v1/users/me/...`).
 
 ### Message Operations
 - `gmail/v1/users/me/messages` - List/search messages (GET with `q` and `maxResults` params)

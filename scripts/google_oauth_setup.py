@@ -261,6 +261,40 @@ def determine_service_type(service_name: str, scopes: list[str]) -> str:
     return "gmail"
 
 
+def print_usage():
+    print("""Google OAuth2 Setup for claude-ai-skills
+
+Usage:
+    python google_oauth_setup.py              Interactive setup (add new account)
+    python google_oauth_setup.py --rename     Rename a service (interactive)
+    python google_oauth_setup.py --rename <old> <new>
+    python google_oauth_setup.py --remove     Remove a service (interactive)
+    python google_oauth_setup.py --remove <name>
+    python google_oauth_setup.py --help       Show this help
+""")
+
+
+def _load_credentials() -> tuple[Path, dict]:
+    """Load credentials.json, return (path, dict). Exit on error."""
+    creds_file = Path(__file__).parent.parent / "server" / "credentials.json"
+    if not creds_file.exists():
+        print("Error: credentials.json not found.")
+        sys.exit(1)
+    with open(creds_file) as f:
+        return creds_file, json.load(f)
+
+
+def _save_credentials(creds_file: Path, credentials: dict) -> None:
+    """Write credentials dict to file."""
+    with open(creds_file, "w") as f:
+        json.dump(credentials, f, indent=2)
+
+
+def _list_oauth2_services(credentials: dict) -> list[str]:
+    """List service names that have refresh_token (OAuth2 services)."""
+    return [name for name, config in credentials.items() if isinstance(config, dict) and config.get("refresh_token")]
+
+
 def save_credentials(
     service_name: str,
     client_id: str,
@@ -333,8 +367,95 @@ def save_credentials(
         return False
 
 
+def rename_service():
+    """Rename a Google service in credentials.json."""
+    creds_file, credentials = _load_credentials()
+    services = _list_oauth2_services(credentials)
+
+    if not services:
+        print("No Google/OAuth2 services found.")
+        return
+
+    print("Current Google services:")
+    for i, name in enumerate(services, 1):
+        print(f"  {i}. {name}")
+
+    if len(sys.argv) >= 4:
+        old_name = sys.argv[2]
+        new_name = sys.argv[3]
+    else:
+        old_name = get_input("\nEnter current service name: ")
+        new_name = get_input("Enter new service name: ")
+
+    if old_name not in credentials:
+        print(f"Error: Service '{old_name}' not found.")
+        sys.exit(1)
+
+    if new_name in credentials:
+        print(f"Error: Service '{new_name}' already exists.")
+        sys.exit(1)
+
+    entry = credentials[old_name]
+
+    # If renaming from known to custom name, add type/base_url
+    if old_name in KNOWN_SERVICES and new_name not in KNOWN_SERVICES:
+        if "type" not in entry:
+            entry["type"] = "oauth2"
+        if "base_url" not in entry:
+            service_type = determine_service_type(old_name, [])
+            if service_type in SERVICE_BASE_URLS:
+                entry["base_url"] = SERVICE_BASE_URLS[service_type]
+
+    credentials[new_name] = entry
+    del credentials[old_name]
+
+    _save_credentials(creds_file, credentials)
+    print(f"Renamed '{old_name}' -> '{new_name}'.")
+
+
+def remove_service():
+    """Remove a Google service from credentials.json."""
+    creds_file, credentials = _load_credentials()
+    services = _list_oauth2_services(credentials)
+
+    if not services:
+        print("No Google/OAuth2 services found.")
+        return
+
+    print("Current Google services:")
+    for i, name in enumerate(services, 1):
+        print(f"  {i}. {name}")
+
+    if len(sys.argv) >= 3:
+        target = sys.argv[2]
+    else:
+        target = get_input("\nEnter service name to remove: ")
+
+    if target not in credentials:
+        print(f"Error: Service '{target}' not found.")
+        sys.exit(1)
+
+    confirm = get_input(f"Remove '{target}'? This cannot be undone. (yes/no): ")
+    if confirm.lower() != "yes":
+        print("Cancelled.")
+        return
+
+    del credentials[target]
+    _save_credentials(creds_file, credentials)
+    print(f"Removed '{target}'.")
+
+
 def main():
     """Main entry point."""
+    if len(sys.argv) >= 2:
+        if sys.argv[1] == "--rename":
+            return rename_service()
+        elif sys.argv[1] == "--remove":
+            return remove_service()
+        elif sys.argv[1] in ("--help", "-h"):
+            print_usage()
+            return
+
     print("=" * 60)
     print("Google OAuth2 Setup for claude-ai-skills")
     print("=" * 60)

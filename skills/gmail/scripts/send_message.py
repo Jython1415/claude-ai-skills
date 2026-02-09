@@ -10,8 +10,9 @@ Usage:
     python send_message.py <to> <subject> <body>
 
 Environment variables (from MCP create_session):
-    SESSION_ID - Session ID
-    PROXY_URL  - Proxy base URL
+    SESSION_ID    - Session ID
+    PROXY_URL     - Proxy base URL
+    GMAIL_SERVICE - Service name in credential proxy (default: "gmail")
 
 Example:
     SESSION_ID=abc123 PROXY_URL=https://proxy.example.com python send_message.py "recipient@example.com" "Test Subject" "Hello, this is a test email!"
@@ -37,6 +38,7 @@ def send_message(to: str, subject: str, body: str) -> dict:
     Returns:
         API response with message ID and thread ID
     """
+    service = os.environ.get("GMAIL_SERVICE", "gmail")
     session_id = os.environ.get("SESSION_ID")
     proxy_url = os.environ.get("PROXY_URL")
 
@@ -53,7 +55,7 @@ def send_message(to: str, subject: str, body: str) -> dict:
 
     # Send via Gmail API
     response = requests.post(
-        f"{proxy_url}/proxy/gmail/gmail/v1/users/me/messages/send",
+        f"{proxy_url}/proxy/{service}/gmail/v1/users/me/messages/send",
         json={"raw": raw},
         headers={"X-Session-Id": session_id},
         timeout=30,
@@ -62,7 +64,7 @@ def send_message(to: str, subject: str, body: str) -> dict:
     if response.status_code == 401:
         raise ValueError("Session invalid or expired. Create a new session.")
     if response.status_code == 403:
-        raise ValueError("Session does not have access to gmail service.")
+        raise ValueError(f"Session does not have access to {service} service.")
 
     response.raise_for_status()
     return response.json()
