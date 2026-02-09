@@ -10,6 +10,7 @@ Provides:
 All file operations use temporary directories with automatic cleanup.
 """
 
+import hmac
 import logging
 import os
 import shutil
@@ -45,8 +46,10 @@ app = Flask(__name__)
 # Configuration
 SECRET_KEY = os.environ.get("PROXY_SECRET_KEY")
 if not SECRET_KEY:
-    logger.warning("PROXY_SECRET_KEY not set! Using insecure default.")
-    SECRET_KEY = "CHANGE-ME-INSECURE"
+    raise ValueError(
+        "Missing PROXY_SECRET_KEY configuration. "
+        "Set the PROXY_SECRET_KEY environment variable before starting the server."
+    )
 
 # Public URL for proxy (returned to Claude.ai scripts in session responses)
 PUBLIC_PROXY_URL = os.environ.get("PUBLIC_PROXY_URL", "https://proxy.joshuashew.com")
@@ -78,7 +81,9 @@ logger.info(f"Loaded {len(credential_store.list_services())} service(s) from cre
 
 def verify_auth(auth_header):
     """Verify legacy authentication token (X-Auth-Key)"""
-    return auth_header == SECRET_KEY
+    if not auth_header:
+        return False
+    return hmac.compare_digest(auth_header, SECRET_KEY)
 
 
 def verify_session_or_key(service: str = "git") -> bool:
@@ -304,9 +309,31 @@ def fetch_bundle():
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_path = os.path.join(temp_dir, repo_name)
 
-            # Clone repository
+            # Clone repository (bare clone to prevent checkout/hooks/filters)
             logger.info(f"Cloning {repo_url} to temporary directory")
-            result = subprocess.run(["git", "clone", repo_url, repo_path], capture_output=True, timeout=300, text=True)
+            git_env = {
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_CONFIG_GLOBAL": "/dev/null",
+                "GIT_TERMINAL_PROMPT": "0",
+                "PATH": os.environ.get("PATH", ""),
+            }
+            result = subprocess.run(
+                [
+                    "git",
+                    "clone",
+                    "--bare",
+                    "--config",
+                    "core.hooksPath=/dev/null",
+                    "--config",
+                    "core.fsmonitor=",
+                    repo_url,
+                    repo_path,
+                ],
+                capture_output=True,
+                timeout=300,
+                text=True,
+                env=git_env,
+            )
             if result.returncode != 0:
                 # Log full details locally for debugging
                 logger.error(f"Clone failed: {result.stderr}")
@@ -476,9 +503,31 @@ def push_bundle():
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_path = os.path.join(temp_dir, repo_name)
 
-            # Clone repository
+            # Clone repository (bare clone to prevent checkout/hooks/filters)
             logger.info(f"Cloning {repo_url} to temporary directory")
-            result = subprocess.run(["git", "clone", repo_url, repo_path], capture_output=True, timeout=300, text=True)
+            git_env = {
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_CONFIG_GLOBAL": "/dev/null",
+                "GIT_TERMINAL_PROMPT": "0",
+                "PATH": os.environ.get("PATH", ""),
+            }
+            result = subprocess.run(
+                [
+                    "git",
+                    "clone",
+                    "--bare",
+                    "--config",
+                    "core.hooksPath=/dev/null",
+                    "--config",
+                    "core.fsmonitor=",
+                    repo_url,
+                    repo_path,
+                ],
+                capture_output=True,
+                timeout=300,
+                text=True,
+                env=git_env,
+            )
             if result.returncode != 0:
                 # Log full details locally for debugging
                 logger.error(f"Clone failed: {result.stderr}")

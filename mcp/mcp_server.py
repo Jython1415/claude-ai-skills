@@ -40,15 +40,17 @@ if not PROXY_SECRET_KEY:
 
 GITHUB_CLIENT_ID = os.environ.get("GITHUB_CLIENT_ID")
 GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET")
-GITHUB_ALLOWED_USERS = set(os.environ.get("GITHUB_ALLOWED_USERS", "").split(","))
+GITHUB_ALLOWED_USERS = {u.strip() for u in os.environ.get("GITHUB_ALLOWED_USERS", "").split(",") if u.strip()}
 BASE_URL = os.environ.get("BASE_URL", "https://mcp.joshuashew.com")
 
 if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
     logger.error("GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be set!")
     raise ValueError("Missing GitHub OAuth configuration")
 
-if not GITHUB_ALLOWED_USERS or GITHUB_ALLOWED_USERS == {""}:
-    logger.warning("No GitHub users in allowlist! Set GITHUB_ALLOWED_USERS")
+if not GITHUB_ALLOWED_USERS:
+    raise ValueError(
+        "No GitHub users in allowlist. Set the GITHUB_ALLOWED_USERS environment variable (comma-separated usernames)."
+    )
 
 auth = GitHubProvider(
     client_id=GITHUB_CLIENT_ID, client_secret=GITHUB_CLIENT_SECRET, base_url=BASE_URL, redirect_path="/oauth/callback"
