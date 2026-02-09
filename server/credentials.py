@@ -216,6 +216,7 @@ class CredentialStore:
         """
         self._credentials: dict[str, ServiceCredential] = {}
         self._last_mtime: float = 0
+        self._lock = threading.RLock()
 
         if config_path is None:
             config_path = os.path.join(os.path.dirname(__file__), "credentials.json")
@@ -225,13 +226,14 @@ class CredentialStore:
 
     def _check_reload(self) -> None:
         """Reload credentials if the config file has been modified."""
-        try:
-            mtime = os.path.getmtime(self._config_path)
-        except OSError:
-            return
-        if mtime != self._last_mtime:
-            logger.info("Credentials file changed, reloading...")
-            self.reload()
+        with self._lock:
+            try:
+                mtime = os.path.getmtime(self._config_path)
+            except OSError:
+                return
+            if mtime != self._last_mtime:
+                logger.info("Credentials file changed, reloading...")
+                self.reload()
 
     def _load(self) -> None:
         """Load credentials from JSON file."""
@@ -327,8 +329,9 @@ class CredentialStore:
         Returns:
             ServiceCredential if found, None otherwise
         """
-        self._check_reload()
-        return self._credentials.get(service)
+        with self._lock:
+            self._check_reload()
+            return self._credentials.get(service)
 
     def list_services(self) -> list[str]:
         """
@@ -337,8 +340,9 @@ class CredentialStore:
         Returns:
             List of service names
         """
-        self._check_reload()
-        return sorted(self._credentials.keys())
+        with self._lock:
+            self._check_reload()
+            return sorted(self._credentials.keys())
 
     def has_service(self, service: str) -> bool:
         """
@@ -350,9 +354,11 @@ class CredentialStore:
         Returns:
             True if service exists in credential store
         """
-        return service in self._credentials
+        with self._lock:
+            return service in self._credentials
 
     def reload(self) -> None:
         """Reload credentials from config file."""
-        self._credentials.clear()
-        self._load()
+        with self._lock:
+            self._credentials.clear()
+            self._load()

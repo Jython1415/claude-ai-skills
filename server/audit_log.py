@@ -79,18 +79,25 @@ class AuditLog:
             }
         )
 
-    def git_fetch(self, session_id: str | None, repo_url: str, status_code: int) -> None:
+    def git_fetch(self, session_id: str | None, repo_url: str, status_code: int, auth_type: str | None = None) -> None:
         self._write(
             {
                 "event": "git_fetch",
                 "session_id": session_id,
                 "repo_url": repo_url,
                 "status": status_code,
+                "auth_type": auth_type,
             }
         )
 
     def git_push(
-        self, session_id: str | None, repo_url: str, branch: str, status_code: int, pr_url: str | None = None
+        self,
+        session_id: str | None,
+        repo_url: str,
+        branch: str,
+        status_code: int,
+        pr_url: str | None = None,
+        auth_type: str | None = None,
     ) -> None:
         self._write(
             {
@@ -100,6 +107,7 @@ class AuditLog:
                 "branch": branch,
                 "status": status_code,
                 "pr_url": pr_url,
+                "auth_type": auth_type,
             }
         )
 
