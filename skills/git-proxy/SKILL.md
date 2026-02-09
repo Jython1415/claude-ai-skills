@@ -112,16 +112,9 @@ The `git_client.py` library provides helper functions:
 ```python
 from git_client import GitProxyClient, clone_repo
 
-# Session-based auth (recommended)
 client = GitProxyClient(
     proxy_url=os.environ["PROXY_URL"],
     session_id=os.environ["SESSION_ID"]
-)
-
-# Or legacy key-based auth (still supported)
-client = GitProxyClient(
-    proxy_url=os.environ["PROXY_URL"],
-    auth_key=os.environ["GIT_PROXY_KEY"]
 )
 
 # Clone (one-step: fetch bundle + clone + configure git user)
@@ -150,7 +143,7 @@ Clone a repository and return it as a git bundle.
 
 **Response:** Binary git bundle file
 
-**Auth:** `X-Session-Id` header (recommended) or `X-Auth-Key` header (legacy)
+**Auth:** `X-Session-Id` header (requires session with 'git' service access)
 
 ### POST /git/push-bundle
 
@@ -174,7 +167,7 @@ Apply a git bundle and push to GitHub. Optionally create a PR.
 }
 ```
 
-**Auth:** `X-Session-Id` header (recommended) or `X-Auth-Key` header (legacy)
+**Auth:** `X-Session-Id` header (requires session with 'git' service access)
 
 ## Critical: Bundle Creation
 
@@ -196,7 +189,7 @@ Using `HEAD` causes "Couldn't find remote ref" errors on the server side.
 
 ## Security
 
-- All operations require session-based auth (or legacy key auth)
+- All operations require session-based auth via `X-Session-Id` header
 - Git credentials (SSH keys) stay on the proxy server
 - Files are processed in temporary directories with automatic cleanup
 - No persistent storage on proxy server
