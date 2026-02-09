@@ -6,6 +6,7 @@ Streams responses back to avoid buffering large payloads.
 """
 
 import logging
+from urllib.parse import unquote, urlparse
 
 import requests
 from credentials import CredentialStore
@@ -102,6 +103,28 @@ def forward_request(
     # Build target URL
     base_url = cred.base_url.rstrip("/")
     target_url = f"{base_url}/{path}"
+
+    # Validate against path traversal
+    decoded_path = unquote(path)
+    if ".." in decoded_path or ".." in path:
+        logger.warning(f"Path traversal detected in proxy path: {path}")
+        return Response(
+            '{"error": "path traversal detected"}',
+            status=400,
+            mimetype="application/json",
+        )
+
+    # Verify the resolved URL still starts with the base URL
+    parsed_base = urlparse(base_url)
+    parsed_target = urlparse(target_url)
+    if parsed_target.netloc != parsed_base.netloc:
+        logger.warning(f"Proxy target host mismatch: {parsed_target.netloc} != {parsed_base.netloc}")
+        return Response(
+            '{"error": "proxy target host mismatch"}',
+            status=400,
+            mimetype="application/json",
+        )
+
     if query_string:
         target_url = f"{target_url}?{query_string}"
 
