@@ -4,17 +4,16 @@
 # dependencies = ["requests"]
 # ///
 """
-Get Bluesky user profile via credential proxy.
+Get Bluesky user profile.
+
+Uses the public API by default. Set SESSION_ID and PROXY_URL environment
+variables to use the credential proxy instead.
 
 Usage:
     python get_profile.py <handle_or_did>
 
-Environment variables (from MCP create_session):
-    SESSION_ID - Session ID
-    PROXY_URL  - Proxy base URL
-
 Example:
-    SESSION_ID=abc123 PROXY_URL=https://proxy.example.com python get_profile.py bsky.app
+    python get_profile.py bsky.app
 """
 
 import os
@@ -22,10 +21,15 @@ import sys
 
 import requests
 
+PUBLIC_API = "https://public.api.bsky.app/xrpc"
+
 
 def get_profile(actor: str) -> dict:
     """
     Get Bluesky user profile.
+
+    Uses the public API by default (no auth needed).
+    Falls back to credential proxy if SESSION_ID and PROXY_URL are set.
 
     Args:
         actor: Handle (e.g., "bsky.app") or DID
@@ -36,20 +40,22 @@ def get_profile(actor: str) -> dict:
     session_id = os.environ.get("SESSION_ID")
     proxy_url = os.environ.get("PROXY_URL")
 
-    if not session_id or not proxy_url:
-        raise ValueError("SESSION_ID and PROXY_URL environment variables required.\nUse MCP create_session tool first.")
+    if session_id and proxy_url:
+        # Use proxy (authenticated)
+        response = requests.get(
+            f"{proxy_url}/proxy/bsky/app.bsky.actor.getProfile",
+            params={"actor": actor},
+            headers={"X-Session-Id": session_id},
+            timeout=30,
+        )
+    else:
+        # Use public API (no auth needed)
+        response = requests.get(
+            f"{PUBLIC_API}/app.bsky.actor.getProfile",
+            params={"actor": actor},
+            timeout=30,
+        )
 
-    response = requests.get(
-        f"{proxy_url}/proxy/bsky/app.bsky.actor.getProfile",
-        params={"actor": actor},
-        headers={"X-Session-Id": session_id},
-        timeout=30,
-    )
-
-    if response.status_code == 401:
-        raise ValueError("Session invalid or expired. Create a new session.")
-    if response.status_code == 403:
-        raise ValueError("Session does not have access to bsky service.")
     if response.status_code == 400:
         raise ValueError(f"User not found: {actor}")
 

@@ -4,17 +4,16 @@
 # dependencies = ["requests"]
 # ///
 """
-Search Bluesky posts via credential proxy.
+Search Bluesky posts.
+
+Uses the public API by default. Set SESSION_ID and PROXY_URL environment
+variables to use the credential proxy instead.
 
 Usage:
     python search_posts.py <query> [limit]
 
-Environment variables (from MCP create_session):
-    SESSION_ID - Session ID
-    PROXY_URL  - Proxy base URL
-
 Example:
-    SESSION_ID=abc123 PROXY_URL=https://proxy.example.com python search_posts.py "python" 10
+    python search_posts.py "python" 10
 """
 
 import os
@@ -22,10 +21,15 @@ import sys
 
 import requests
 
+PUBLIC_API = "https://public.api.bsky.app/xrpc"
+
 
 def search_posts(query: str, limit: int = 25) -> dict:
     """
     Search Bluesky posts.
+
+    Uses the public API by default (no auth needed).
+    Falls back to credential proxy if SESSION_ID and PROXY_URL are set.
 
     Args:
         query: Search query string
@@ -37,20 +41,21 @@ def search_posts(query: str, limit: int = 25) -> dict:
     session_id = os.environ.get("SESSION_ID")
     proxy_url = os.environ.get("PROXY_URL")
 
-    if not session_id or not proxy_url:
-        raise ValueError("SESSION_ID and PROXY_URL environment variables required.\nUse MCP create_session tool first.")
-
-    response = requests.get(
-        f"{proxy_url}/proxy/bsky/app.bsky.feed.searchPosts",
-        params={"q": query, "limit": min(limit, 100)},
-        headers={"X-Session-Id": session_id},
-        timeout=30,
-    )
-
-    if response.status_code == 401:
-        raise ValueError("Session invalid or expired. Create a new session.")
-    if response.status_code == 403:
-        raise ValueError("Session does not have access to bsky service.")
+    if session_id and proxy_url:
+        # Use proxy (authenticated)
+        response = requests.get(
+            f"{proxy_url}/proxy/bsky/app.bsky.feed.searchPosts",
+            params={"q": query, "limit": min(limit, 100)},
+            headers={"X-Session-Id": session_id},
+            timeout=30,
+        )
+    else:
+        # Use public API (no auth needed)
+        response = requests.get(
+            f"{PUBLIC_API}/app.bsky.feed.searchPosts",
+            params={"q": query, "limit": min(limit, 100)},
+            timeout=30,
+        )
 
     response.raise_for_status()
     return response.json()
