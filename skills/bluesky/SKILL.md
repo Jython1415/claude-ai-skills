@@ -1,5 +1,5 @@
 ---
-name: bluesky-access
+name: bluesky
 description: Search and interact with Bluesky/ATProtocol via credential proxy
 ---
 

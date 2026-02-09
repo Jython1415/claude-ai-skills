@@ -97,7 +97,7 @@ Tools:
 
 ### Phase 3: Bluesky Skill (Test Case)
 
-Port the existing bluesky-access skill to use this pattern:
+Port the existing bluesky skill to use this pattern:
 - Remove config.json with credentials
 - Scripts read `SESSION_ID` and `PROXY_URL` from env
 - All API calls go through proxy
@@ -117,7 +117,7 @@ claude-credential-proxy/
 │   ├── server.py              # MCP server implementation
 │   └── README.md              # MCP setup instructions
 ├── skills/
-│   ├── bluesky-access/
+│   ├── bluesky/
 │   │   ├── SKILL.md
 │   │   └── scripts/
 │   │       ├── search_bluesky.py
@@ -139,7 +139,7 @@ claude-credential-proxy/
 
 For Claude Code implementing this:
 - Current git-proxy implementation: see the .zip file in context
-- Current bluesky-access skill: see the .skill file in context
+- Current bluesky skill: see the .skill file in context
 - Transparent proxy pattern: standard HTTP forwarding, nothing exotic
 - MCP server creation: https://modelcontextprotocol.io/quickstart/server
 
