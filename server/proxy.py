@@ -18,20 +18,16 @@ logger = logging.getLogger(__name__)
 # Initialize credential redactor
 redactor = get_redactor()
 
-# Headers that should not be forwarded (hop-by-hop headers)
-HOP_BY_HOP_HEADERS = {
-    "connection",
-    "keep-alive",
-    "proxy-authenticate",
-    "proxy-authorization",
-    "te",
-    "trailer",
-    "transfer-encoding",
-    "upgrade",
-    "host",
-    # Also exclude our custom auth headers
-    "x-session-id",
-    "x-auth-key",
+# Only these request headers are forwarded to upstream services.
+# Using an allowlist prevents leaking internal or sensitive headers.
+ALLOWED_FORWARD_HEADERS = {
+    "content-type",
+    "accept",
+    "accept-language",
+    "accept-encoding",
+    "user-agent",
+    "content-length",
+    "content-encoding",
 }
 
 # Response headers that should not be forwarded back
@@ -46,15 +42,18 @@ EXCLUDED_RESPONSE_HEADERS = {
 
 def filter_request_headers(headers: dict) -> dict:
     """
-    Filter out hop-by-hop and internal headers from request.
+    Filter request headers to only include allowed headers.
+
+    Uses an allowlist approach to prevent leaking internal,
+    hop-by-hop, or authentication headers to upstream services.
 
     Args:
         headers: Original request headers
 
     Returns:
-        Filtered headers dict
+        Filtered headers dict containing only allowed headers
     """
-    return {k: v for k, v in headers.items() if k.lower() not in HOP_BY_HOP_HEADERS}
+    return {k: v for k, v in headers.items() if k.lower() in ALLOWED_FORWARD_HEADERS}
 
 
 def filter_response_headers(headers: dict) -> dict:
