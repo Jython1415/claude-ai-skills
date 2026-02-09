@@ -9,12 +9,12 @@ on:
   workflow_dispatch:
     inputs:
       skill_name:
-        description: 'Skill to release (e.g., git-proxy, bluesky-access, sift)'
+        description: 'Skill to release (e.g., git-proxy, bluesky, sift)'
         required: true
         type: choice
         options:
           - git-proxy
-          - bluesky-access
+          - bluesky
           - sift
       version:
         description: 'Version to release (e.g., 1.0.0) - overrides VERSION file'
