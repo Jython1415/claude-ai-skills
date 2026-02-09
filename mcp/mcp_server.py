@@ -22,6 +22,8 @@ from fastmcp import Context, FastMCP
 from fastmcp.server.auth.providers.github import GitHubProvider
 from fastmcp.server.dependencies import get_access_token
 
+from mcp.server.fastmcp.exceptions import ToolError
+
 # Add parent directory to path to import server modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from server.error_redaction import get_redactor
@@ -70,15 +72,12 @@ def require_allowlist(func: Callable) -> Callable:
     async def wrapper(context: Context, *args, **kwargs) -> Any:
         access_token = get_access_token()
         if access_token is None:
-            return {"error": "Authentication required"}
+            raise ToolError("Authentication required")
         github_username = access_token.claims.get("login", "unknown")
 
         if github_username not in GITHUB_ALLOWED_USERS:
             logger.warning(f"Access denied for user: {github_username}")
-            return {
-                "error": "Access denied",
-                "message": f"User '{github_username}' is not authorized to use this service",
-            }
+            raise ToolError("Access denied")
 
         logger.info(f"Authorized user '{github_username}' accessing {func.__name__}")
         return await func(context, *args, **kwargs)

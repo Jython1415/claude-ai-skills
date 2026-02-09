@@ -42,6 +42,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100 MB
 
 # Configuration
 SECRET_KEY = os.environ.get("PROXY_SECRET_KEY")
@@ -135,6 +136,10 @@ def create_session():
     data = request.json or {}
     services = data.get("services", [])
     ttl_minutes = data.get("ttl_minutes", 30)
+    try:
+        ttl_minutes = max(1, min(int(ttl_minutes), 480))  # Clamp to 1-480 minutes
+    except (TypeError, ValueError):
+        ttl_minutes = 30
 
     if not services:
         return jsonify({"error": "services list is required"}), 400
@@ -226,9 +231,7 @@ def proxy_request(service: str, rest: str):
         return jsonify({"error": "invalid or expired session"}), 401
 
     if not session.has_service(service):
-        return jsonify(
-            {"error": f"session does not have access to {service}", "session_services": session.services}
-        ), 403
+        return jsonify({"error": f"session does not have access to {service}"}), 403
 
     # Build upstream URL for audit logging (before credential injection)
     cred = credential_store.get(service)
@@ -719,9 +722,10 @@ if __name__ == "__main__":
     logger.info(f"Legacy auth key configured: {bool(os.environ.get('PROXY_SECRET_KEY'))}")
     logger.info(f"Services available: {credential_store.list_services() + ['git']}")
 
-    # Run server
+    # Run server — debug is always off to prevent interactive debugger
+    # and code reloading in production. Use logging for diagnostics.
     app.run(
         host="127.0.0.1",
         port=int(os.environ.get("PORT", 8443)),
-        debug=os.environ.get("DEBUG", "False").lower() == "true",
+        debug=False,
     )
