@@ -23,6 +23,7 @@ from credentials import CredentialStore
 from error_redaction import get_redactor
 from error_utils import error_response
 from flask import Flask, jsonify, request, send_file
+from flask_limiter import Limiter
 from git_safety import is_protected_branch, validate_branch_name, validate_push_command_safety, validate_repo_url
 from proxy import forward_request
 
@@ -43,6 +44,31 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100 MB
+
+
+def _rate_limit_key():
+    """Key function for rate limiting: use session ID, auth key, or global fallback."""
+    session_id = request.headers.get("X-Session-Id")
+    if session_id:
+        return f"session:{session_id}"
+    auth_key = request.headers.get("X-Auth-Key")
+    if auth_key:
+        return "admin-key"
+    return "global"
+
+
+limiter = Limiter(
+    key_func=_rate_limit_key,
+    app=app,
+    storage_uri="memory://",
+    default_limits=[],
+)
+
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    return jsonify({"error": "rate limit exceeded", "message": str(e.description)}), 429
+
 
 # Configuration
 SECRET_KEY = os.environ.get("PROXY_SECRET_KEY")
@@ -112,6 +138,7 @@ def verify_session_or_key(service: str = "git") -> str | None:
 
 
 @app.route("/health", methods=["GET"])
+@limiter.exempt
 def health():
     """Health check endpoint (no sensitive data exposed)"""
     return jsonify({"status": "healthy", "mode": "credential-proxy", "timestamp": datetime.now().isoformat()})
@@ -123,6 +150,7 @@ def health():
 
 
 @app.route("/sessions", methods=["POST"])
+@limiter.limit("10/minute", key_func=lambda: "global")
 def create_session():
     """
     Create a new session granting access to specified services.
@@ -176,6 +204,7 @@ def create_session():
 
 
 @app.route("/sessions/<session_id>", methods=["DELETE"])
+@limiter.limit("20/minute")
 def revoke_session(session_id: str):
     """Revoke a session. Requires X-Auth-Key header."""
     auth_key = request.headers.get("X-Auth-Key")
@@ -191,6 +220,7 @@ def revoke_session(session_id: str):
 
 
 @app.route("/services", methods=["GET"])
+@limiter.limit("20/minute")
 def list_services():
     """List available services. Requires X-Auth-Key header."""
     auth_key = request.headers.get("X-Auth-Key")
@@ -210,6 +240,7 @@ def list_services():
 
 
 @app.route("/proxy/<service>/<path:rest>", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"])
+@limiter.limit("60/minute")
 def proxy_request(service: str, rest: str):
     """
     Transparent proxy to upstream service.
@@ -271,6 +302,7 @@ def proxy_request(service: str, rest: str):
 
 
 @app.route("/git/fetch-bundle", methods=["POST"])
+@limiter.limit("5/minute")
 def fetch_bundle():
     """
     Clone repository and return as git bundle (temporary operation)
@@ -428,6 +460,7 @@ def fetch_bundle():
 
 
 @app.route("/git/push-bundle", methods=["POST"])
+@limiter.limit("5/minute")
 def push_bundle():
     """
     Apply bundle and push to GitHub (temporary operation)
