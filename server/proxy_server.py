@@ -364,6 +364,7 @@ def fetch_bundle():
                 capture_output=True,
                 timeout=60,
                 text=True,
+                env=git_env,
             )
 
             if result.returncode != 0:
@@ -554,6 +555,7 @@ def push_bundle():
                 capture_output=True,
                 timeout=60,
                 text=True,
+                env=git_env,
             )
 
             if result.returncode != 0:
@@ -580,7 +582,7 @@ def push_bundle():
                 )
 
             logger.info(f"Pushing {branch} to origin")
-            result = subprocess.run(push_cmd, cwd=repo_path, capture_output=True, timeout=60, text=True)
+            result = subprocess.run(push_cmd, cwd=repo_path, capture_output=True, timeout=60, text=True, env=git_env)
 
             if result.returncode != 0:
                 # Log full details locally for debugging
@@ -637,7 +639,16 @@ def push_bundle():
                         branch,
                     ]
 
-                    result = subprocess.run(gh_cmd, cwd=repo_path, capture_output=True, timeout=60, text=True)
+                    # gh CLI needs HOME for config and GH_TOKEN/GITHUB_TOKEN for auth
+                    gh_env = {
+                        **git_env,
+                        "HOME": os.environ.get("HOME", ""),
+                        "GH_TOKEN": os.environ.get("GH_TOKEN", ""),
+                        "GITHUB_TOKEN": os.environ.get("GITHUB_TOKEN", ""),
+                    }
+                    result = subprocess.run(
+                        gh_cmd, cwd=repo_path, capture_output=True, timeout=60, text=True, env=gh_env
+                    )
 
                     if result.returncode == 0:
                         pr_url = result.stdout.strip()
