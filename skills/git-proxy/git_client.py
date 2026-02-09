@@ -6,6 +6,7 @@ Communicates with git bundle proxy server for temporary git operations
 
 import os
 import subprocess
+import warnings
 
 import requests
 
@@ -42,6 +43,11 @@ class GitProxyClient:
         """Get authentication headers based on available credentials"""
         if self.session_id:
             return {"X-Session-Id": self.session_id}
+        warnings.warn(
+            "Legacy X-Auth-Key authentication is deprecated. Use session-based auth with SESSION_ID.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return {"X-Auth-Key": self.auth_key}
 
     def health_check(self) -> dict:
@@ -145,16 +151,16 @@ def get_client() -> GitProxyClient:
     return _client
 
 
-def load_env_from_file(env_file: str = "/mnt/project/_env") -> None:
+def load_env_from_file(env_file: str) -> None:
     """
-    Load environment variables from file
+    Load environment variables from file.
 
     Args:
-        env_file: Path to environment file (default: /mnt/project/_env for Claude.ai Projects)
+        env_file: Path to environment file (required)
 
     Example:
-        load_env_from_file()  # Load from default location
-        client = GitProxyClient()  # Now has access to GIT_PROXY_URL and GIT_PROXY_KEY
+        load_env_from_file("/path/to/env")
+        client = GitProxyClient()
     """
     if not os.path.exists(env_file):
         raise FileNotFoundError(f"Environment file not found: {env_file}")
