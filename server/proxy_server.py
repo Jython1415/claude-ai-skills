@@ -87,7 +87,7 @@ def verify_auth(auth_header):
     return hmac.compare_digest(auth_header, SECRET_KEY)
 
 
-def verify_session_or_key(service: str = "git") -> bool:
+def verify_session_or_key(service: str = "git") -> str | None:
     """
     Verify request has valid session (with service access) OR legacy auth key.
 
@@ -95,16 +95,20 @@ def verify_session_or_key(service: str = "git") -> bool:
         service: The service to check access for (default 'git')
 
     Returns:
-        True if authorized, False otherwise
+        "session" if session auth, "legacy_key" if key auth, None if unauthorized
     """
     # Try session-based auth first
     session_id = request.headers.get("X-Session-Id")
     if session_id and session_store.has_service(session_id, service):
-        return True
+        return "session"
 
     # Fall back to legacy key-based auth
     auth_key = request.headers.get("X-Auth-Key")
-    return verify_auth(auth_key)
+    if verify_auth(auth_key):
+        logger.warning("DEPRECATION: Legacy X-Auth-Key used for git endpoint. Migrate to session-based auth.")
+        return "legacy_key"
+
+    return None
 
 
 @app.route("/health", methods=["GET"])
@@ -279,9 +283,12 @@ def fetch_bundle():
     Authentication: X-Session-Id (with 'git' service) OR X-Auth-Key
     """
     # Verify authentication (session or legacy key)
-    if not verify_session_or_key("git"):
+    auth_type = verify_session_or_key("git")
+    if not auth_type:
         logger.warning("Unauthorized fetch-bundle attempt")
-        audit_log.git_fetch(session_id=request.headers.get("X-Session-Id"), repo_url="unknown", status_code=401)
+        audit_log.git_fetch(
+            session_id=request.headers.get("X-Session-Id"), repo_url="unknown", status_code=401, auth_type=None
+        )
         return jsonify({"error": "unauthorized"}), 401
 
     repo_url = None
@@ -382,7 +389,9 @@ def fetch_bundle():
                 )
 
             logger.info("Bundle created successfully, temp repo cleaned up")
-            audit_log.git_fetch(session_id=request.headers.get("X-Session-Id"), repo_url=repo_url, status_code=200)
+            audit_log.git_fetch(
+                session_id=request.headers.get("X-Session-Id"), repo_url=repo_url, status_code=200, auth_type=auth_type
+            )
 
             # Return bundle file (temp bundle file will be cleaned up by Flask after sending)
             return send_file(
@@ -395,14 +404,20 @@ def fetch_bundle():
     except subprocess.TimeoutExpired:
         logger.error(f"Timeout while fetching bundle for {repo_url}")
         audit_log.git_fetch(
-            session_id=request.headers.get("X-Session-Id"), repo_url=repo_url or "unknown", status_code=408
+            session_id=request.headers.get("X-Session-Id"),
+            repo_url=repo_url or "unknown",
+            status_code=408,
+            auth_type=auth_type,
         )
         return jsonify({"error": "operation timeout"}), 408
 
     except Exception as e:
         logger.error(f"Error creating bundle: {e}")
         audit_log.git_fetch(
-            session_id=request.headers.get("X-Session-Id"), repo_url=repo_url or "unknown", status_code=500
+            session_id=request.headers.get("X-Session-Id"),
+            repo_url=repo_url or "unknown",
+            status_code=500,
+            auth_type=auth_type,
         )
         return error_response(
             what="Bundle operation failed",
@@ -431,10 +446,15 @@ def push_bundle():
     Authentication: X-Session-Id (with 'git' service) OR X-Auth-Key
     """
     # Verify authentication (session or legacy key)
-    if not verify_session_or_key("git"):
+    auth_type = verify_session_or_key("git")
+    if not auth_type:
         logger.warning("Unauthorized push-bundle attempt")
         audit_log.git_push(
-            session_id=request.headers.get("X-Session-Id"), repo_url="unknown", branch="unknown", status_code=401
+            session_id=request.headers.get("X-Session-Id"),
+            repo_url="unknown",
+            branch="unknown",
+            status_code=401,
+            auth_type=None,
         )
         return jsonify({"error": "unauthorized"}), 401
 
@@ -682,6 +702,7 @@ def push_bundle():
                 branch=branch,
                 status_code=200,
                 pr_url=response.get("pr_url"),
+                auth_type=auth_type,
             )
             return jsonify(response)
 
@@ -692,6 +713,7 @@ def push_bundle():
             repo_url=repo_url or "unknown",
             branch=branch or "unknown",
             status_code=408,
+            auth_type=auth_type,
         )
         return jsonify({"error": "operation timeout"}), 408
 
@@ -702,6 +724,7 @@ def push_bundle():
             repo_url=repo_url or "unknown",
             branch=branch or "unknown",
             status_code=500,
+            auth_type=auth_type,
         )
         return error_response(
             what="Push operation failed",
