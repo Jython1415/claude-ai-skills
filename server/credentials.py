@@ -3,6 +3,7 @@ Credential Store for Credential Proxy
 
 Service-aware credential handling with built-in support for:
 - ATProto (Bluesky): Automatic session management with identifier + app_password
+- OAuth2 (Google APIs): Automatic token refresh with client credentials + refresh_token
 - Bearer token APIs: Simple token injection
 - Git: Pseudo-service using local git/gh CLI (no credentials needed)
 """
@@ -27,6 +28,9 @@ redactor = get_redactor()
 KNOWN_SERVICES = {
     "bsky": {"base_url": "https://bsky.social/xrpc", "type": "atproto"},
     "github_api": {"base_url": "https://api.github.com", "type": "bearer"},
+    "gmail": {"base_url": "https://gmail.googleapis.com", "type": "oauth2"},
+    "gcal": {"base_url": "https://www.googleapis.com/calendar/v3", "type": "oauth2"},
+    "gdrive": {"base_url": "https://www.googleapis.com/drive/v3", "type": "oauth2"},
 }
 
 
@@ -42,10 +46,18 @@ class ATProtoSession:
 
 
 @dataclass
+class OAuth2Token:
+    """Cached OAuth2 access token with expiry."""
+
+    access_token: str
+    expires_at: datetime
+
+
+@dataclass
 class ServiceCredential:
     """Configuration for a proxied service."""
 
-    service_type: str  # "atproto", "bearer", "header", "query"
+    service_type: str  # "atproto", "bearer", "header", "query", "oauth2"
     base_url: str
 
     # For bearer/header/query types
@@ -58,6 +70,14 @@ class ServiceCredential:
     app_password: str | None = None
     _atproto_session: ATProtoSession | None = field(default=None, repr=False)
     _session_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    # For OAuth2 type
+    client_id: str | None = None
+    client_secret: str | None = None
+    refresh_token: str | None = None
+    token_url: str = "https://oauth2.googleapis.com/token"
+    _oauth2_token: OAuth2Token | None = field(default=None, repr=False)
+    _oauth2_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def inject_auth(self, headers: dict, url: str) -> tuple[dict, str]:
         """
@@ -88,6 +108,13 @@ class ServiceCredential:
             header_name = self.auth_header or "X-API-Key"
             if self.credential:
                 headers[header_name] = self.credential
+
+        elif self.service_type == "oauth2":
+            token = self._get_oauth2_token()
+            if token:
+                headers["Authorization"] = f"Bearer {token}"
+            else:
+                logger.error("Failed to get OAuth2 access token")
 
         elif self.service_type == "query":
             param_name = self.query_param or "api_key"
@@ -187,6 +214,61 @@ class ServiceCredential:
             self._atproto_session = None
             return False
 
+    def _get_oauth2_token(self) -> str | None:
+        """Get a valid OAuth2 access token, refreshing if needed."""
+        with self._oauth2_lock:
+            now = datetime.utcnow()
+
+            # Return cached token if still valid (with 5-min buffer)
+            if self._oauth2_token:
+                if self._oauth2_token.expires_at > now + timedelta(minutes=5):
+                    return self._oauth2_token.access_token
+
+            # Refresh the token
+            if self._refresh_oauth2_token():
+                return self._oauth2_token.access_token
+
+            return None
+
+    def _refresh_oauth2_token(self) -> bool:
+        """Refresh the OAuth2 access token using the refresh token."""
+        if not self.client_id or not self.client_secret or not self.refresh_token:
+            logger.error("OAuth2 service missing client_id, client_secret, or refresh_token")
+            return False
+
+        try:
+            response = requests.post(
+                self.token_url,
+                data={
+                    "grant_type": "refresh_token",
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                    "refresh_token": self.refresh_token,
+                },
+                timeout=10,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            access_token = data["access_token"]
+            expires_in = data.get("expires_in", 3600)
+
+            self._oauth2_token = OAuth2Token(
+                access_token=access_token,
+                expires_at=datetime.utcnow() + timedelta(seconds=expires_in),
+            )
+
+            # Track access token for redaction in error messages
+            redactor.track_runtime_credential(access_token)
+
+            logger.info("Refreshed OAuth2 access token")
+            return True
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to refresh OAuth2 token: {e}")
+            self._oauth2_token = None
+            return False
+
 
 class CredentialStore:
     """
@@ -200,11 +282,16 @@ class CredentialStore:
         },
         "github_api": {
             "token": "ghp_..."
+        },
+        "gmail": {
+            "client_id": "...",
+            "client_secret": "...",
+            "refresh_token": "..."
         }
     }
 
-    Known services (bsky, github_api) have hardcoded base URLs and auth types.
-    Custom services can specify full configuration.
+    Known services (bsky, github_api, gmail, gcal, gdrive) have hardcoded
+    base URLs and auth types. Custom services can specify full configuration.
     """
 
     def __init__(self, config_path: str | None = None):
@@ -279,6 +366,8 @@ class CredentialStore:
         if not service_type:
             if "identifier" in config or "app_password" in config:
                 service_type = "atproto"
+            elif "refresh_token" in config:
+                service_type = "oauth2"
             elif "token" in config or "credential" in config:
                 service_type = "bearer"
             else:
@@ -313,6 +402,16 @@ class CredentialStore:
                 base_url=base_url,
                 credential=config.get("credential"),
                 query_param=config.get("query_param"),
+            )
+
+        elif service_type == "oauth2":
+            return ServiceCredential(
+                service_type="oauth2",
+                base_url=base_url,
+                client_id=config.get("client_id"),
+                client_secret=config.get("client_secret"),
+                refresh_token=config.get("refresh_token"),
+                token_url=config.get("token_url", "https://oauth2.googleapis.com/token"),
             )
 
         else:

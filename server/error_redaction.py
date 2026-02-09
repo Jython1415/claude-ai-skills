@@ -77,6 +77,9 @@ class CredentialRedactor:
                                 "auth_token",
                                 "api_key",
                                 "secret",
+                                "client_id",
+                                "client_secret",
+                                "refresh_token",
                             ):
                                 self.credentials_to_redact.add(value)
 
