@@ -27,8 +27,7 @@ import sys
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from urllib.parse import urlencode, urlparse, parse_qs
-from typing import Optional
+from urllib.parse import parse_qs, urlencode, urlparse
 
 try:
     import requests
@@ -65,8 +64,8 @@ SERVICE_BASE_URLS = {
 class OAuthCallbackHandler(BaseHTTPRequestHandler):
     """HTTP request handler for OAuth callback."""
 
-    auth_code: Optional[str] = None
-    error: Optional[str] = None
+    auth_code: str | None = None
+    error: str | None = None
 
     def do_GET(self):
         """Handle GET request from OAuth callback."""
@@ -100,7 +99,7 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
                 <head><title>Authorization Failed</title></head>
                 <body>
                 <h1>Authorization failed</h1>
-                <p>Error: {params['error'][0]}</p>
+                <p>Error: {params["error"][0]}</p>
                 <p>You can close this window and return to the terminal.</p>
                 </body>
                 </html>
@@ -151,9 +150,7 @@ def select_scopes() -> list[str]:
             print("Invalid choice. Please enter 1-4.")
 
 
-def start_oauth_flow(
-    client_id: str, client_secret: str, scopes: list[str], port: int = 8080
-) -> Optional[str]:
+def start_oauth_flow(client_id: str, client_secret: str, scopes: list[str], port: int = 8080) -> str | None:
     """
     Start OAuth flow and return refresh token.
 
@@ -179,8 +176,8 @@ def start_oauth_flow(
     }
     auth_url = f"{AUTH_URL}?{urlencode(auth_params)}"
 
-    print(f"\nOpening browser for Google authorization...")
-    print(f"If the browser doesn't open, visit this URL manually:")
+    print("\nOpening browser for Google authorization...")
+    print("If the browser doesn't open, visit this URL manually:")
     print(f"\n{auth_url}\n")
 
     # Open browser
@@ -222,14 +219,8 @@ def start_oauth_flow(
         tokens = response.json()
 
         if "refresh_token" not in tokens:
-            print(
-                "Warning: No refresh token received. This can happen if you've "
-                "already authorized this app."
-            )
-            print(
-                "Try revoking access at https://myaccount.google.com/permissions "
-                "and run this script again."
-            )
+            print("Warning: No refresh token received. This can happen if you've already authorized this app.")
+            print("Try revoking access at https://myaccount.google.com/permissions and run this script again.")
             return None
 
         return tokens["refresh_token"]
@@ -240,7 +231,7 @@ def start_oauth_flow(
             try:
                 error_detail = e.response.json()
                 print(f"Server response: {json.dumps(error_detail, indent=2)}")
-            except:
+            except Exception:
                 print(f"Server response: {e.response.text}")
         return None
 
@@ -298,7 +289,7 @@ def save_credentials(
     credentials = {}
     if creds_file.exists():
         try:
-            with open(creds_file, "r") as f:
+            with open(creds_file) as f:
                 credentials = json.load(f)
             print(f"Loaded existing credentials from {creds_file}")
         except json.JSONDecodeError as e:
@@ -421,9 +412,7 @@ For multi-account setup, use descriptive names like 'gmail_work' or 'gmail_perso
         print("Step 6: Save credentials")
         print("-" * 60)
 
-        if save_credentials(
-            service_name, client_id, client_secret, refresh_token, scopes
-        ):
+        if save_credentials(service_name, client_id, client_secret, refresh_token, scopes):
             print("\n" + "=" * 60)
             print("Setup completed successfully!")
             print("=" * 60)

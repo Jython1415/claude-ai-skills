@@ -84,7 +84,7 @@ def main():
         thread_id = result.get("threadId", "unknown")
         labels = result.get("labelIds", [])
 
-        print(f"Email sent successfully!")
+        print("Email sent successfully!")
         print(f"Message ID: {msg_id}")
         print(f"Thread ID: {thread_id}")
         print(f"Labels: {', '.join(labels)}")
