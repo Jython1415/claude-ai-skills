@@ -111,11 +111,16 @@ the Flask API. The setup script validates this key is set before starting servic
   },
   "github_api": {
     "token": "ghp_..."
+  },
+  "gmail": {
+    "client_id": "...",
+    "client_secret": "...",
+    "refresh_token": "..."
   }
 }
 ```
 
-Known services (`bsky`, `github_api`) have hardcoded base URLs and auth types
+Known services (`bsky`, `github_api`, `gmail`, `gcal`, `gdrive`) have hardcoded base URLs and auth types
 in `credentials.py`. Custom services need explicit `base_url` and `type` fields.
 
 ## Running Locally
@@ -200,3 +205,14 @@ Each service in `credentials.json` specifies:
 - `credential`: The secret token
 - `auth_header`: Custom header name (for `auth_type: header`)
 - `query_param`: Query param name (for `auth_type: query`)
+
+### OAuth2 Services (Google APIs)
+
+Google API services use OAuth2 with automatic token refresh. Configure with:
+- `client_id`: Google Cloud OAuth2 client ID
+- `client_secret`: Google Cloud OAuth2 client secret
+- `refresh_token`: Offline refresh token (use `scripts/google_oauth_setup.py` to obtain)
+- `token_url`: (optional) Token endpoint, defaults to `https://oauth2.googleapis.com/token`
+
+Known OAuth2 services: `gmail` (Gmail API), `gcal` (Google Calendar), `gdrive` (Google Drive).
+Multi-account is supported via distinct service names (e.g., `gmail_work`) with explicit `base_url` and `type: "oauth2"`.

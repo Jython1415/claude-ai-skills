@@ -97,7 +97,8 @@ async def create_session(context: Context, services: list[str], ttl_minutes: int
 
     Args:
         services: List of service names to grant access to.
-                  Common services: "bsky" (Bluesky), "github_api", "git"
+                  Common services: "bsky" (Bluesky), "github_api", "git",
+                  "gmail" (Gmail API), "gcal" (Google Calendar), "gdrive" (Google Drive)
                   Use list_services() to see all available services.
         ttl_minutes: Session lifetime in minutes (default: 30, max: 480)
 
@@ -198,6 +199,9 @@ async def list_services(context: Context) -> dict:
         - "git": Git bundle operations (clone, push via bundles)
         - "bsky": Bluesky/ATProtocol API
         - "github_api": GitHub REST API
+        - "gmail": Gmail API (OAuth2, auto-refresh)
+        - "gcal": Google Calendar API (OAuth2, auto-refresh)
+        - "gdrive": Google Drive API (OAuth2, auto-refresh)
     """
     try:
         async with httpx.AsyncClient() as client:
