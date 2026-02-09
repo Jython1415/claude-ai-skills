@@ -1,51 +1,25 @@
 ---
 name: bluesky
-description: Search and interact with Bluesky/ATProtocol via credential proxy
+description: Search and interact with Bluesky/ATProtocol. Public API for reads (no auth needed), credential proxy for writes.
 ---
 
-# Bluesky Access Skill
+# Bluesky Skill
 
-Access Bluesky (ATProtocol) APIs through the credential proxy. Credentials are managed server-side - no tokens appear in Claude's context.
+Access Bluesky (ATProtocol) APIs. Read operations use the public API directly (no authentication needed). Write operations use the credential proxy.
 
-## Prerequisites
+## Public API (No Auth Required)
 
-1. **MCP Custom Connector**: Add the credential proxy MCP server as a custom connector in Claude.ai
-2. **Bluesky Credentials**: Configured on the proxy server in `credentials.json`
-
-## Setup
-
-Before using this skill, create a session using the MCP tools:
-
-```
-Use create_session with services: ["bsky"]
-```
-
-This returns `session_id` and `proxy_url` (a public HTTPS URL via Cloudflare Tunnel, e.g., `https://proxy.joshuashew.com`) - set these as environment variables for scripts.
-
-## Environment Variables
-
-Scripts expect these environment variables (provided by MCP session):
-
-| Variable | Description |
-|----------|-------------|
-| `SESSION_ID` | Session ID from create_session |
-| `PROXY_URL` | Public proxy URL from create_session (Cloudflare Tunnel URL) |
-
-## Usage Examples
+The public API at `https://public.api.bsky.app/xrpc` supports all read operations without authentication.
 
 ### Search Posts
 
 ```python
-import os
 import requests
 
-SESSION_ID = os.environ['SESSION_ID']
-PROXY_URL = os.environ['PROXY_URL']
-
 response = requests.get(
-    f"{PROXY_URL}/proxy/bsky/app.bsky.feed.searchPosts",
+    "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts",
     params={"q": "python programming", "limit": 25},
-    headers={"X-Session-Id": SESSION_ID}
+    timeout=30,
 )
 
 for post in response.json().get("posts", []):
@@ -58,9 +32,9 @@ for post in response.json().get("posts", []):
 
 ```python
 response = requests.get(
-    f"{PROXY_URL}/proxy/bsky/app.bsky.actor.getProfile",
+    "https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile",
     params={"actor": "bsky.app"},
-    headers={"X-Session-Id": SESSION_ID}
+    timeout=30,
 )
 print(response.json())
 ```
@@ -69,49 +43,85 @@ print(response.json())
 
 ```python
 response = requests.get(
-    f"{PROXY_URL}/proxy/bsky/app.bsky.feed.getAuthorFeed",
+    "https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed",
     params={"actor": "bsky.app", "limit": 10},
-    headers={"X-Session-Id": SESSION_ID}
+    timeout=30,
 )
 for item in response.json().get("feed", []):
     print(item["post"]["record"]["text"][:100])
 ```
 
-## Available Endpoints
+## Authenticated Operations (Via Proxy)
 
-All ATProtocol endpoints are available via `/proxy/bsky/<endpoint>`. Common ones:
+Write operations (posting, liking, following, etc.) require authentication via the credential proxy.
+
+### Setup
+
+1. **MCP Custom Connector**: Add the credential proxy MCP server as a custom connector in Claude.ai
+2. **Bluesky Credentials**: Configured on the proxy server in `credentials.json`
+
+Create a session:
+```
+Use create_session with services: ["bsky"]
+```
+
+This returns `session_id` and `proxy_url` — set these as environment variables.
+
+### Create a Post
+
+```python
+import os
+import requests
+
+SESSION_ID = os.environ["SESSION_ID"]
+PROXY_URL = os.environ["PROXY_URL"]
+
+response = requests.post(
+    f"{PROXY_URL}/proxy/bsky/com.atproto.repo.createRecord",
+    json={
+        "repo": "your-did-here",
+        "collection": "app.bsky.feed.post",
+        "record": {
+            "$type": "app.bsky.feed.post",
+            "text": "Hello from Claude!",
+            "createdAt": "2024-01-01T00:00:00.000Z"
+        }
+    },
+    headers={"X-Session-Id": SESSION_ID},
+    timeout=30,
+)
+```
+
+## Available Read Endpoints (Public API)
+
+All these work without authentication via `https://public.api.bsky.app/xrpc/`:
 
 ### Feed Operations
-- `app.bsky.feed.searchPosts` - Search posts
-- `app.bsky.feed.getAuthorFeed` - Get user's posts
-- `app.bsky.feed.getTimeline` - Get home timeline
-- `app.bsky.feed.getPostThread` - Get post with replies
-- `app.bsky.feed.getPosts` - Get specific posts by URI
+- `app.bsky.feed.searchPosts` — Search posts
+- `app.bsky.feed.getAuthorFeed` — Get user's posts
+- `app.bsky.feed.getPostThread` — Get post with replies
+- `app.bsky.feed.getPosts` — Get specific posts by URI
 
 ### Actor Operations
-- `app.bsky.actor.getProfile` - Get user profile
-- `app.bsky.actor.getProfiles` - Get multiple profiles
-- `app.bsky.actor.searchActors` - Search for users
+- `app.bsky.actor.getProfile` — Get user profile
+- `app.bsky.actor.getProfiles` — Get multiple profiles
+- `app.bsky.actor.searchActors` — Search for users
 
 ### Graph Operations
-- `app.bsky.graph.getFollowers` - Get followers
-- `app.bsky.graph.getFollows` - Get following
-- `app.bsky.graph.getBlocks` - Get blocked accounts
-- `app.bsky.graph.getMutes` - Get muted accounts
+- `app.bsky.graph.getFollowers` — Get followers
+- `app.bsky.graph.getFollows` — Get following
 
-### Notification Operations
-- `app.bsky.notification.listNotifications` - List notifications
+## Write Endpoints (Require Proxy Auth)
 
-## Security
+These require a session via the credential proxy:
 
-- Bluesky credentials (app password) stay on the proxy server
-- Sessions expire automatically (default 30 minutes)
-- Sessions can be revoked early via `revoke_session` MCP tool
-- Only ATProtocol endpoints are accessible (not arbitrary URLs)
+- `com.atproto.repo.createRecord` — Create posts, likes, follows
+- `com.atproto.repo.deleteRecord` — Delete records
+- `app.bsky.notification.updateSeen` — Mark notifications read
 
 ## Scripts
 
 See the `scripts/` directory for ready-to-use Python scripts:
 
-- `search_posts.py` - Search Bluesky posts
-- `get_profile.py` - Get user profile information
+- `search_posts.py` — Search Bluesky posts (uses public API, falls back to proxy)
+- `get_profile.py` — Get user profile information (uses public API, falls back to proxy)
