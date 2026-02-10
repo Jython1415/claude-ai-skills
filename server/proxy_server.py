@@ -19,7 +19,7 @@ import subprocess
 import tempfile
 from datetime import datetime
 
-import requests as req_lib
+import requests
 
 from audit_log import get_audit_log
 from credentials import CredentialStore
@@ -303,8 +303,8 @@ def create_issue():
         payload["labels"] = labels
 
     try:
-        resp = req_lib.post(github_url, json=payload, headers=headers, timeout=15)
-    except req_lib.exceptions.RequestException as e:
+        resp = requests.post(github_url, json=payload, headers=headers, timeout=15)
+    except requests.exceptions.RequestException as e:
         logger.error(f"GitHub API request failed: {e}")
         return jsonify({"error": "failed to reach GitHub API"}), 502
 
