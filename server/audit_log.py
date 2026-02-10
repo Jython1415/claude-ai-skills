@@ -65,19 +65,27 @@ class AuditLog:
         )
 
     def proxy_request(
-        self, session_id: str, service: str, method: str, path: str, upstream_url: str, status_code: int
+        self,
+        session_id: str,
+        service: str,
+        method: str,
+        path: str,
+        upstream_url: str,
+        status_code: int,
+        blocked_reason: str | None = None,
     ) -> None:
-        self._write(
-            {
-                "event": "proxy_request",
-                "session_id": session_id,
-                "service": service,
-                "method": method,
-                "path": path,
-                "upstream_url": upstream_url,
-                "status": status_code,
-            }
-        )
+        entry = {
+            "event": "proxy_request",
+            "session_id": session_id,
+            "service": service,
+            "method": method,
+            "path": path,
+            "upstream_url": upstream_url,
+            "status": status_code,
+        }
+        if blocked_reason:
+            entry["blocked_reason"] = blocked_reason
+        self._write(entry)
 
     def git_fetch(self, session_id: str | None, repo_url: str, status_code: int, auth_type: str | None = None) -> None:
         self._write(
