@@ -36,19 +36,6 @@ Scripts expect these environment variables (provided by MCP session):
 
 Multiple Gmail accounts can be configured with custom service names (e.g., `gmail_personal`, `gmail_work`).
 
-### Managing Accounts
-
-```bash
-# Add a new account (interactive — enter a custom service name when prompted)
-python scripts/google_oauth_setup.py
-
-# Rename an existing account
-python scripts/google_oauth_setup.py --rename gmail gmail_personal
-
-# Remove an account
-python scripts/google_oauth_setup.py --remove gmail_work
-```
-
 ### Using a Specific Account
 
 Set the `GMAIL_SERVICE` environment variable to target a non-default account:
@@ -113,7 +100,7 @@ response = requests.get(
 print(response.json())
 ```
 
-### Send an Email
+### Create a Draft
 
 ```python
 import base64
@@ -127,10 +114,10 @@ message["Subject"] = "Test Email"
 # Encode message
 raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
 
-# Send via API
+# Create draft via API
 response = requests.post(
-    f"{PROXY_URL}/proxy/gmail/gmail/v1/users/me/messages/send",
-    json={"raw": raw},
+    f"{PROXY_URL}/proxy/gmail/gmail/v1/users/me/drafts",
+    json={"message": {"raw": raw}},
     headers={"X-Session-Id": SESSION_ID}
 )
 print(response.json())
@@ -145,10 +132,11 @@ All Gmail API v1 endpoints are available via `/proxy/gmail/gmail/v1/users/me/...
 ### Message Operations
 - `gmail/v1/users/me/messages` - List/search messages (GET with `q` and `maxResults` params)
 - `gmail/v1/users/me/messages/{id}` - Get message by ID (GET with `format` and `metadataHeaders` params)
-- `gmail/v1/users/me/messages/send` - Send message (POST with `raw` field)
 - `gmail/v1/users/me/messages/{id}/modify` - Modify message labels (POST)
 - `gmail/v1/users/me/messages/{id}/trash` - Move message to trash (POST)
 - `gmail/v1/users/me/messages/{id}/untrash` - Remove message from trash (POST)
+
+> **Note:** `messages/send` is blocked by the proxy - use drafts instead.
 
 ### Label Operations
 - `gmail/v1/users/me/labels` - List all labels (GET)
@@ -167,7 +155,8 @@ All Gmail API v1 endpoints are available via `/proxy/gmail/gmail/v1/users/me/...
 ### Draft Operations
 - `gmail/v1/users/me/drafts` - List/create drafts (GET/POST)
 - `gmail/v1/users/me/drafts/{id}` - Get/update/delete draft (GET/PUT/DELETE)
-- `gmail/v1/users/me/drafts/send` - Send draft (POST)
+
+> **Note:** `drafts/send` is blocked by the proxy.
 
 ### Profile Operations
 - `gmail/v1/users/me/profile` - Get user profile (email, total messages, threads count)
@@ -195,9 +184,25 @@ Gmail supports powerful search operators in the `q` parameter:
 - Only Gmail API endpoints are accessible (not arbitrary URLs)
 - All requests use HTTPS with session ID authentication
 
+### Restricted Operations
+
+The proxy enforces endpoint-level filtering for defense-in-depth, independent of OAuth scopes:
+
+**Blocked:**
+- **Send** (`messages/send`, `drafts/send`) - Email cannot be sent through the proxy; use drafts instead
+- **Permanent delete** (`DELETE messages/{id}`, `DELETE threads/{id}`, `batchDelete`) - Use trash instead
+- **Insert/Import** (`POST messages`, `messages/import`) - Direct message insertion is blocked
+- **Settings** (all `settings/*` endpoints) - Forwarding, delegates, filters, and other settings are blocked
+
+**Allowed:**
+- Read messages, threads, drafts, labels, profile, history
+- Draft CRUD (create, read, update, delete)
+- Label CRUD (create, read, update, delete)
+- Modify labels on messages/threads (`modify`, `batchModify`)
+- Trash/untrash messages and threads
+
 ## Scripts
 
 See the `scripts/` directory for ready-to-use Python scripts:
 
 - `list_messages.py` - Search and list Gmail messages
-- `send_message.py` - Send emails via Gmail API
