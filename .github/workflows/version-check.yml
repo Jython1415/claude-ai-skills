@@ -1,0 +1,77 @@
+name: Skill Version Check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'skills/**'
+
+jobs:
+  check-version-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check skill version bumps
+        run: |
+          set -e
+
+          BASE_REF="${{ github.event.pull_request.base.sha }}"
+          HEAD_REF="${{ github.event.pull_request.head.sha }}"
+
+          # Get all changed files in skills/
+          CHANGED_FILES=$(git diff --name-only "$BASE_REF" "$HEAD_REF" -- 'skills/')
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No skill files changed"
+            exit 0
+          fi
+
+          # Find which skills have non-VERSION changes
+          SKILLS_WITH_CHANGES=$(echo "$CHANGED_FILES" | sed -n 's|^skills/\([^/]*\)/.*|\1|p' | sort -u)
+
+          ERRORS=()
+
+          for SKILL in $SKILLS_WITH_CHANGES; do
+            # Check if this skill has changes beyond just VERSION
+            NON_VERSION_CHANGES=$(echo "$CHANGED_FILES" | grep "^skills/$SKILL/" | grep -v "^skills/$SKILL/VERSION$" || true)
+
+            if [ -z "$NON_VERSION_CHANGES" ]; then
+              echo "✓ $SKILL: Only VERSION changed, OK"
+              continue
+            fi
+
+            # Skill has non-VERSION changes — VERSION must also change
+            VERSION_CHANGED=$(echo "$CHANGED_FILES" | grep "^skills/$SKILL/VERSION$" || true)
+
+            if [ -z "$VERSION_CHANGED" ]; then
+              ERRORS+=("✗ $SKILL: Files changed but VERSION was not bumped. Update skills/$SKILL/VERSION.")
+              continue
+            fi
+
+            # VERSION changed — check it's not a repeat
+            NEW_VERSION=$(cat "skills/$SKILL/VERSION" | tr -d '[:space:]')
+            TAG="$SKILL-v$NEW_VERSION"
+
+            if git tag -l "$TAG" | grep -q "$TAG"; then
+              ERRORS+=("✗ $SKILL: Version $NEW_VERSION already released (tag $TAG exists). Bump to a new version.")
+              continue
+            fi
+
+            echo "✓ $SKILL: Version bumped to $NEW_VERSION (new)"
+          done
+
+          if [ ${#ERRORS[@]} -gt 0 ]; then
+            echo ""
+            echo "Version check failed:"
+            for ERR in "${ERRORS[@]}"; do
+              echo "  $ERR"
+            done
+            exit 1
+          fi
+
+          echo ""
+          echo "All version checks passed!"
