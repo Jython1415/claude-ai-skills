@@ -14,7 +14,7 @@ import sys
 import threading
 import time
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, Mock, patch
 
 # Add server directory to path
@@ -39,11 +39,13 @@ class TestOAuth2Token(unittest.TestCase):
 
     def test_oauth2_token_dataclass(self):
         """Test basic OAuth2Token creation."""
-        token = OAuth2Token(access_token="test_access_token_abc123", expires_at=datetime.utcnow() + timedelta(hours=1))
+        token = OAuth2Token(
+            access_token="test_access_token_abc123", expires_at=datetime.now(timezone.utc) + timedelta(hours=1)
+        )
 
         self.assertEqual(token.access_token, "test_access_token_abc123")
         self.assertIsInstance(token.expires_at, datetime)
-        self.assertGreater(token.expires_at, datetime.utcnow())
+        self.assertGreater(token.expires_at, datetime.now(timezone.utc))
 
 
 class TestOAuth2TokenManagement(unittest.TestCase):
@@ -95,7 +97,7 @@ class TestOAuth2TokenManagement(unittest.TestCase):
     def test_oauth2_token_caching(self):
         """Test that valid cached tokens are reused without HTTP calls."""
         # Set up a cached token that expires in 10 minutes (well within safe zone)
-        future_expiry = datetime.utcnow() + timedelta(minutes=10)
+        future_expiry = datetime.now(timezone.utc) + timedelta(minutes=10)
         self.credential._oauth2_token = OAuth2Token(access_token="cached_token_xyz789", expires_at=future_expiry)
 
         with patch("requests.post") as mock_post:
@@ -108,7 +110,7 @@ class TestOAuth2TokenManagement(unittest.TestCase):
     def test_oauth2_token_expiry_refresh(self):
         """Test that expired tokens trigger a refresh."""
         # Set up an expired token
-        past_expiry = datetime.utcnow() - timedelta(minutes=5)
+        past_expiry = datetime.now(timezone.utc) - timedelta(minutes=5)
         self.credential._oauth2_token = OAuth2Token(access_token="expired_token_old", expires_at=past_expiry)
 
         mock_response = MagicMock()
@@ -128,7 +130,7 @@ class TestOAuth2TokenManagement(unittest.TestCase):
     def test_oauth2_pre_expiry_refresh(self):
         """Test that tokens expiring within 5 minutes are proactively refreshed."""
         # Set up a token expiring in 3 minutes (within 5-minute buffer)
-        near_expiry = datetime.utcnow() + timedelta(minutes=3)
+        near_expiry = datetime.now(timezone.utc) + timedelta(minutes=3)
         self.credential._oauth2_token = OAuth2Token(access_token="soon_to_expire_token", expires_at=near_expiry)
 
         mock_response = MagicMock()
@@ -214,7 +216,7 @@ class TestOAuth2InjectAuth(unittest.TestCase):
     def test_oauth2_inject_auth(self):
         """Test that inject_auth sets Bearer token in Authorization header."""
         # Set up a valid cached token
-        future_expiry = datetime.utcnow() + timedelta(hours=1)
+        future_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
         self.credential._oauth2_token = OAuth2Token(access_token="bearer_token_xyz123", expires_at=future_expiry)
 
         headers = {"Content-Type": "application/json"}

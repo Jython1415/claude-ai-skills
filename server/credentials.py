@@ -13,7 +13,7 @@ import logging
 import os
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import requests
 from error_redaction import get_redactor
@@ -127,7 +127,7 @@ class ServiceCredential:
     def _get_atproto_token(self) -> str | None:
         """Get a valid ATProto access token, creating/refreshing session as needed."""
         with self._session_lock:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             # Check if we have a valid cached session
             if self._atproto_session:
@@ -166,7 +166,7 @@ class ServiceCredential:
                 refresh_jwt=data["refreshJwt"],
                 did=data["did"],
                 handle=data["handle"],
-                expires_at=datetime.utcnow() + timedelta(hours=2),
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=2),
             )
 
             # Track JWTs for redaction in error messages
@@ -199,7 +199,7 @@ class ServiceCredential:
                 refresh_jwt=data["refreshJwt"],
                 did=data["did"],
                 handle=data["handle"],
-                expires_at=datetime.utcnow() + timedelta(hours=2),
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=2),
             )
 
             # Track refreshed JWTs for redaction in error messages
@@ -217,7 +217,7 @@ class ServiceCredential:
     def _get_oauth2_token(self) -> str | None:
         """Get a valid OAuth2 access token, refreshing if needed."""
         with self._oauth2_lock:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             # Return cached token if still valid (with 5-min buffer)
             if self._oauth2_token:
@@ -255,7 +255,7 @@ class ServiceCredential:
 
             self._oauth2_token = OAuth2Token(
                 access_token=access_token,
-                expires_at=datetime.utcnow() + timedelta(seconds=expires_in),
+                expires_at=datetime.now(timezone.utc) + timedelta(seconds=expires_in),
             )
 
             # Track access token for redaction in error messages
