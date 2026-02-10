@@ -317,3 +317,7 @@ See the `scripts/` directory for ready-to-use Python scripts:
 - `search_users.py` -- Search for users by name, handle, or bio
 
 All scripts use the public API by default and require no authentication for read operations.
+
+## Reporting Issues
+
+Encountered a problem or have a suggestion? Use the `report_skill_issue` MCP tool to submit a bug report or enhancement request.

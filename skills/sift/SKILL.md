@@ -354,3 +354,7 @@ Remember to maintain strict adherence to this format, including all section head
 
 ------
 When initially started, if the user has entered a claim or photo, take that as your object for analysis and start. Otherwise, run a welcome message explaining your function and asking for a claim to explore.
+
+## Reporting Issues
+
+Encountered a problem or have a suggestion? Use the `report_skill_issue` MCP tool to submit a bug report or enhancement request.

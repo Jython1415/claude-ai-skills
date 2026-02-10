@@ -15,6 +15,7 @@ Claude.ai
     └── Flask Proxy Server (port 8443)
             ├── /sessions     → Session management
             ├── /services     → List available services
+            ├── /issues       → GitHub issue creation
             ├── /proxy/<svc>  → Transparent credential proxy
             └── /git/*        → Git bundle operations
 ```
@@ -30,7 +31,7 @@ Claude.ai
 - `credentials.json` - Your API credentials (gitignored)
 
 ### MCP Server (`mcp/`)
-- `server.py` - FastMCP server with `create_session`, `revoke_session`, `list_services`
+- `server.py` - FastMCP server with `create_session`, `revoke_session`, `list_services`, `report_skill_issue`
 - Runs on port 10000 with Streamable HTTP transport via Cloudflare Tunnel
 - Uses GitHub OAuth with username allowlist (set `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_ALLOWED_USERS` env vars)
 - No custom middleware needed -- uses default FastMCP directly
@@ -82,6 +83,9 @@ Git endpoints accept either session or key auth. Proxy endpoints require session
 - `POST /git/fetch-bundle` - Clone repo, return bundle
 - `POST /git/push-bundle` - Apply bundle, push, create PR
 
+### Issue Reporting (require `X-Auth-Key` header)
+- `POST /issues` - Create GitHub issue in configured repo
+
 ## Configuration
 
 **Server `.env`:**
@@ -96,6 +100,7 @@ GITHUB_CLIENT_ID=<github-oauth-app-client-id>
 GITHUB_CLIENT_SECRET=<github-oauth-app-secret>
 GITHUB_ALLOWED_USERS=Jython1415,other-username
 BASE_URL=https://mcp.joshuashew.com
+ISSUE_REPO=Jython1415/claude-ai-skills    # GitHub repo for issue reporting (owner/repo)
 ```
 
 `PROXY_SECRET_KEY` is required for both servers. The Flask server uses it to

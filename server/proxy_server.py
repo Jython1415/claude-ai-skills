@@ -13,10 +13,13 @@ All file operations use temporary directories with automatic cleanup.
 import hmac
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
 from datetime import datetime
+
+import requests as req_lib
 
 from audit_log import get_audit_log
 from credentials import CredentialStore
@@ -80,6 +83,9 @@ if not SECRET_KEY:
 
 # Public URL for proxy (returned to Claude.ai scripts in session responses)
 PUBLIC_PROXY_URL = os.environ.get("PUBLIC_PROXY_URL", "https://proxy.joshuashew.com")
+
+# GitHub repo for issue reporting (owner/repo format)
+ISSUE_REPO = os.environ.get("ISSUE_REPO", "Jython1415/claude-ai-skills")
 
 # Detect gh CLI at startup
 GH_PATH = shutil.which("gh")
@@ -229,6 +235,96 @@ def list_services():
     if "git" not in services:
         services = services + ["git"]
     return jsonify({"services": sorted(services)})
+
+
+# =============================================================================
+# Issue Reporting Endpoint
+# =============================================================================
+
+_LABEL_RE = re.compile(r"^[a-zA-Z0-9:._-]+$")
+
+
+@app.route("/issues", methods=["POST"])
+@limiter.limit("5/minute")
+def create_issue():
+    """
+    Create a GitHub issue in the configured repo.
+
+    Input: {"title": str, "body": str, "labels": [str] (optional)}
+    Output: {"issue_url": "...", "issue_number": N}
+
+    Requires X-Auth-Key header (admin-only: MCP server creates issues on behalf of users).
+    """
+    auth_key = request.headers.get("X-Auth-Key")
+    if not verify_auth(auth_key):
+        logger.warning(f"Unauthorized issue creation attempt from {request.remote_addr}")
+        return jsonify({"error": "unauthorized"}), 401
+
+    data = request.json or {}
+    title = data.get("title", "")
+    body = data.get("body", "")
+    labels = data.get("labels", [])
+
+    # Validate title
+    if not isinstance(title, str) or not title.strip():
+        return jsonify({"error": "title is required"}), 400
+    if len(title) > 256:
+        return jsonify({"error": "title must be 256 characters or less"}), 400
+
+    # Validate body
+    if not isinstance(body, str) or not body.strip():
+        return jsonify({"error": "body is required"}), 400
+    if len(body) > 65536:
+        return jsonify({"error": "body must be 65536 characters or less"}), 400
+
+    # Validate labels
+    if not isinstance(labels, list):
+        return jsonify({"error": "labels must be a list"}), 400
+    if len(labels) > 10:
+        return jsonify({"error": "at most 10 labels allowed"}), 400
+    for label in labels:
+        if not isinstance(label, str) or not _LABEL_RE.match(label):
+            return jsonify({"error": f"invalid label: {label!r}"}), 400
+
+    # Get github_api credential for bearer token
+    cred = credential_store.get("github_api")
+    if not cred:
+        logger.error("Issue creation failed: github_api service not configured")
+        return jsonify({"error": "github_api service not configured"}), 503
+
+    # Inject auth into headers
+    headers = {"Accept": "application/vnd.github+json"}
+    headers, _ = cred.inject_auth(headers, "")
+
+    # Create issue via GitHub API
+    github_url = f"https://api.github.com/repos/{ISSUE_REPO}/issues"
+    payload = {"title": title.strip(), "body": body.strip()}
+    if labels:
+        payload["labels"] = labels
+
+    try:
+        resp = req_lib.post(github_url, json=payload, headers=headers, timeout=15)
+    except req_lib.exceptions.RequestException as e:
+        logger.error(f"GitHub API request failed: {e}")
+        return jsonify({"error": "failed to reach GitHub API"}), 502
+
+    if resp.status_code not in (200, 201):
+        logger.error(f"GitHub API error {resp.status_code}: {resp.text[:500]}")
+        return jsonify({"error": "GitHub API error", "status": resp.status_code}), 502
+
+    result = resp.json()
+    issue_url = result["html_url"]
+    issue_number = result["number"]
+
+    audit_log.issue_created(
+        issue_url=issue_url,
+        issue_number=issue_number,
+        title=title.strip(),
+        labels=labels or None,
+    )
+    logger.info(f"Created issue #{issue_number}: {issue_url}")
+
+    return jsonify({"issue_url": issue_url, "issue_number": issue_number})
 
 
 # =============================================================================

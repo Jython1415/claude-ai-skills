@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "server"))
 
 import pytest  # noqa: E402
 
-from server.proxy_server import app  # noqa: E402
+from server.proxy_server import app, limiter  # noqa: E402
 
 
 @pytest.fixture
@@ -24,6 +24,7 @@ def flask_app():
     """Provide the Flask app configured for testing."""
     app.config["TESTING"] = True
     app.config["RATELIMIT_ENABLED"] = False  # Disable rate limiting in tests
+    limiter.enabled = False
     return app
 
 
