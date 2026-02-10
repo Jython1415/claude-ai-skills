@@ -240,7 +240,7 @@ def list_services():
 
 
 @app.route("/proxy/<service>/<path:rest>", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"])
-@limiter.limit("60/minute")
+@limiter.limit("300/minute")
 def proxy_request(service: str, rest: str):
     """
     Transparent proxy to upstream service.
