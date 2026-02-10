@@ -25,7 +25,6 @@ from flask import Flask, jsonify, request, send_file
 from flask_limiter import Limiter
 from git_safety import is_protected_branch, validate_branch_name, validate_push_command_safety, validate_repo_url
 from proxy import forward_request
-from service_filters import validate_proxy_request
 
 # Local modules
 from sessions import SessionStore
@@ -264,27 +263,6 @@ def proxy_request(service: str, rest: str):
 
     if not session.has_service(service):
         return jsonify({"error": f"session does not have access to {service}"}), 403
-
-    # Check service-specific endpoint filters (e.g., Gmail send blocking)
-    allowed, filter_error = validate_proxy_request(service, request.method, rest)
-    if not allowed:
-        logger.warning(f"Proxy filter blocked: {request.method} {service}/{rest} - {filter_error}")
-        audit_log.proxy_request(
-            session_id=session_id,
-            service=service,
-            method=request.method,
-            path=rest,
-            upstream_url=f"[BLOCKED] {service}/{rest}",
-            status_code=403,
-            blocked_reason=filter_error,
-        )
-        return error_response(
-            what="Operation not permitted",
-            why=filter_error,
-            action="This endpoint is restricted by proxy security policy",
-            code="PROXY_ENDPOINT_BLOCKED",
-            status=403,
-        )
 
     # Build upstream URL for audit logging (before credential injection)
     cred = credential_store.get(service)

@@ -43,7 +43,8 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 # Scope mappings
 SCOPE_MAPPINGS = {
     "gmail": [
-        "https://www.googleapis.com/auth/gmail.modify",
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.send",
     ],
     "calendar": ["https://www.googleapis.com/auth/calendar"],
     "drive": ["https://www.googleapis.com/auth/drive.readonly"],
@@ -127,7 +128,7 @@ def get_input(prompt: str, required: bool = True) -> str:
 def select_scopes() -> list[str]:
     """Present scope menu and return selected scopes."""
     print("\nSelect Google services to authorize:")
-    print("1. Gmail (read, drafts, labels, modify)")
+    print("1. Gmail (read + send)")
     print("2. Calendar (full access)")
     print("3. Drive (read-only)")
     print("4. All of the above")
