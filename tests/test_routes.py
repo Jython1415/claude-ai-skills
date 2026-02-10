@@ -187,3 +187,103 @@ class TestGitAuth:
             data={"repo_url": "https://github.com/user/repo", "branch": "test"},
         )
         assert resp.status_code == 401
+
+
+# =============================================================================
+# Issue reporting endpoint
+# =============================================================================
+
+
+class TestIssues:
+    """Tests for POST /issues endpoint."""
+
+    def test_create_issue_requires_auth(self, client):
+        resp = client.post(
+            "/issues",
+            json={"title": "Test Issue", "body": "Issue body"},
+        )
+        assert resp.status_code == 401
+
+    def test_create_issue_requires_title(self, client, auth_headers):
+        # Missing title
+        resp = client.post(
+            "/issues",
+            json={"body": "Issue body"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 400
+
+        # Empty title
+        resp = client.post(
+            "/issues",
+            json={"title": "", "body": "Issue body"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 400
+
+    def test_create_issue_requires_body(self, client, auth_headers):
+        resp = client.post(
+            "/issues",
+            json={"title": "Test Issue"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 400
+
+    def test_create_issue_title_too_long(self, client, auth_headers):
+        long_title = "a" * 257
+        resp = client.post(
+            "/issues",
+            json={"title": long_title, "body": "Issue body"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 400
+
+    def test_create_issue_labels_must_be_list(self, client, auth_headers):
+        resp = client.post(
+            "/issues",
+            json={"title": "Test Issue", "body": "Issue body", "labels": "bug"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 400
+
+    def test_create_issue_too_many_labels(self, client, auth_headers):
+        too_many_labels = [f"label{i}" for i in range(11)]
+        resp = client.post(
+            "/issues",
+            json={
+                "title": "Test Issue",
+                "body": "Issue body",
+                "labels": too_many_labels,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 400
+
+    def test_create_issue_invalid_label(self, client, auth_headers):
+        resp = client.post(
+            "/issues",
+            json={
+                "title": "Test Issue",
+                "body": "Issue body",
+                "labels": ["bad label!"],
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 400
+
+    def test_create_issue_github_not_configured(self, client, auth_headers):
+        """Test returns 503 when github_api is not in the credential store."""
+        from unittest.mock import patch
+
+        with patch("server.proxy_server.credential_store") as mock_store:
+            mock_store.get.return_value = None
+            resp = client.post(
+                "/issues",
+                json={
+                    "title": "Test Issue",
+                    "body": "Issue body",
+                    "labels": ["bug", "enhancement"],
+                },
+                headers=auth_headers,
+            )
+        assert resp.status_code == 503

@@ -194,3 +194,7 @@ Using `HEAD` causes "Couldn't find remote ref" errors on the server side.
 - Files are processed in temporary directories with automatic cleanup
 - No persistent storage on proxy server
 - Sessions expire automatically (default 30 minutes)
+
+## Reporting Issues
+
+Encountered a problem or have a suggestion? Use the `report_skill_issue` MCP tool to submit a bug report or enhancement request.

@@ -206,3 +206,7 @@ The proxy enforces endpoint-level filtering for defense-in-depth, independent of
 See the `scripts/` directory for ready-to-use Python scripts:
 
 - `list_messages.py` - Search and list Gmail messages
+
+## Reporting Issues
+
+Encountered a problem or have a suggestion? Use the `report_skill_issue` MCP tool to submit a bug report or enhancement request.

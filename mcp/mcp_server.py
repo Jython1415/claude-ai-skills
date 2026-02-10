@@ -40,6 +40,7 @@ GITHUB_CLIENT_ID = os.environ.get("GITHUB_CLIENT_ID")
 GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET")
 GITHUB_ALLOWED_USERS = {u.strip() for u in os.environ.get("GITHUB_ALLOWED_USERS", "").split(",") if u.strip()}
 BASE_URL = os.environ.get("BASE_URL", "https://mcp.joshuashew.com")
+KNOWN_SKILLS = {"bluesky", "git-proxy", "gmail", "sift"}
 
 if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
     logger.error("GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be set!")
@@ -202,6 +203,123 @@ async def list_services(context: Context) -> dict:
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{FLASK_URL}/services", headers={"X-Auth-Key": PROXY_SECRET_KEY}, timeout=10)
+            response.raise_for_status()
+            return response.json()
+
+    except httpx.TimeoutException:
+        return {"error": "timeout connecting to proxy server"}
+    except httpx.ConnectError:
+        return {"error": f"could not connect to proxy server at {FLASK_URL}"}
+    except Exception as e:
+        # Log full exception for local debugging
+        logger.error(f"MCP tool error: {e}")
+        # Return generic error to client (don't expose exception details)
+        return {"error": "Operation failed", "details": "An unexpected error occurred. Check server logs."}
+
+
+@mcp.tool()
+@require_allowlist
+async def report_skill_issue(
+    context: Context,
+    skill_name: str,
+    title: str,
+    description: str,
+    issue_type: str = "bug",
+    skill_version: str | None = None,
+    steps_to_reproduce: str | None = None,
+    expected_behavior: str | None = None,
+    actual_behavior: str | None = None,
+) -> dict:
+    """
+    Report a bug or feature request for a skill.
+
+    Use this tool when a skill is not working as expected or when you have
+    an idea for improving a skill. This creates a GitHub issue on the
+    claude-ai-skills repository with structured information.
+
+    Args:
+        skill_name: Name of the skill ("bluesky", "git-proxy", "gmail", "sift")
+        title: Brief issue title (max 200 chars)
+        description: Detailed description of the issue or enhancement
+        issue_type: Type of issue ("bug" or "enhancement", default: "bug")
+        skill_version: Version of the skill if known (e.g., "1.1.0")
+        steps_to_reproduce: For bugs, steps to reproduce the issue
+        expected_behavior: For bugs, what should happen
+        actual_behavior: For bugs, what actually happens
+
+    Returns:
+        Dictionary containing:
+        - issue_url: URL to the created GitHub issue
+        - issue_number: Issue number on GitHub
+        Or {"error": "..."} on failure
+
+    Example:
+        report_skill_issue(
+            skill_name="bluesky",
+            title="Post creation fails with special characters",
+            description="When posting with emoji...",
+            issue_type="bug",
+            skill_version="1.0.0",
+            steps_to_reproduce="1. Run post.py with emoji in text\n2. Check response",
+            expected_behavior="Post should be created successfully",
+            actual_behavior="Returns 400 error"
+        )
+    """
+    # Validate skill name
+    if skill_name not in KNOWN_SKILLS:
+        return {
+            "error": f"Unknown skill: {skill_name}. Must be one of: {', '.join(sorted(KNOWN_SKILLS))}"
+        }
+
+    # Validate title length
+    if len(title) > 200:
+        return {"error": "Title must be 200 characters or less"}
+
+    # Validate issue type
+    if issue_type not in ("bug", "enhancement"):
+        return {"error": "issue_type must be 'bug' or 'enhancement'"}
+
+    # Build metadata table
+    metadata_rows = [
+        "| Field | Value |",
+        "|-------|-------|",
+        f"| Skill | `{skill_name}` |",
+        f"| Type | {issue_type} |",
+    ]
+    if skill_version:
+        metadata_rows.append(f"| Version | `{skill_version}` |")
+
+    metadata_table = "\n".join(metadata_rows)
+
+    # Build issue body
+    body_parts = [metadata_table, "", "## Description", "", description]
+
+    # Add bug-specific sections if provided
+    if issue_type == "bug":
+        if steps_to_reproduce:
+            body_parts.extend(["", "## Steps to Reproduce", "", steps_to_reproduce])
+        if expected_behavior:
+            body_parts.extend(["", "## Expected Behavior", "", expected_behavior])
+        if actual_behavior:
+            body_parts.extend(["", "## Actual Behavior", "", actual_behavior])
+
+    body = "\n".join(body_parts)
+
+    # Set labels
+    labels = [f"skill:{skill_name}", issue_type]
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{FLASK_URL}/issues",
+                json={"title": title, "body": body, "labels": labels},
+                headers={"X-Auth-Key": PROXY_SECRET_KEY},
+                timeout=10,
+            )
+
+            if response.status_code == 400:
+                return response.json()
+
             response.raise_for_status()
             return response.json()
 
