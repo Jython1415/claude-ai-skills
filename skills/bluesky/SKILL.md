@@ -160,36 +160,114 @@ All these work without authentication via `https://public.api.bsky.app/xrpc/`:
 - `app.bsky.feed.searchPosts` -- Search posts (supports advanced query syntax)
 - `app.bsky.feed.getAuthorFeed` -- Get user's posts (supports filter param)
 - `app.bsky.feed.getPostThread` -- Get post with parent chain and replies
-- `app.bsky.feed.getPosts` -- Get specific posts by URI
-- `app.bsky.feed.getFeed` -- Get posts from a custom feed
+- `app.bsky.feed.getPosts` -- Get specific posts by URI (up to 25)
+- `app.bsky.feed.getFeed` -- Get posts from a custom feed generator
 - `app.bsky.feed.getListFeed` -- Get posts from a list
 - `app.bsky.feed.getLikes` -- Get users who liked a post
 - `app.bsky.feed.getRepostedBy` -- Get users who reposted a post
 - `app.bsky.feed.getQuotes` -- Get posts that quote a specific post
+- `app.bsky.feed.getActorFeeds` -- Get feed generators created by an actor
+- `app.bsky.feed.getFeedGenerator` -- Get info about a specific feed generator
+- `app.bsky.feed.getFeedGenerators` -- Get info about multiple feed generators
+- `app.bsky.feed.getSuggestedFeeds` -- Get suggested feed generators
+- `app.bsky.feed.describeFeedGenerator` -- Get declaration of a feed generator's supported operations
 
 ### Actor Operations
 - `app.bsky.actor.getProfile` -- Get user profile
-- `app.bsky.actor.getProfiles` -- Get multiple profiles
+- `app.bsky.actor.getProfiles` -- Get multiple profiles (up to 25)
 - `app.bsky.actor.searchActors` -- Search for users
+- `app.bsky.actor.searchActorsTypeahead` -- Typeahead/autocomplete search for users
+- `app.bsky.actor.getSuggestions` -- Get suggested accounts to follow
 
 ### Graph Operations
 - `app.bsky.graph.getFollowers` -- Get followers (paginated, max 100 per page)
 - `app.bsky.graph.getFollows` -- Get following (paginated, max 100 per page)
+- `app.bsky.graph.getKnownFollowers` -- Get followers of an actor that you also follow
+- `app.bsky.graph.getRelationships` -- Get public relationships between accounts
+- `app.bsky.graph.getSuggestedFollowsByActor` -- Get follow suggestions based on an actor
+- `app.bsky.graph.getList` -- Get a list's details and items
+- `app.bsky.graph.getLists` -- Get lists created by an actor
+- `app.bsky.graph.getStarterPack` -- Get a starter pack
+- `app.bsky.graph.getStarterPacks` -- Get multiple starter packs by URI
+- `app.bsky.graph.getActorStarterPacks` -- Get starter packs created by an actor
+- `app.bsky.graph.searchStarterPacks` -- Search starter packs
 
-### Trending (Unspecced)
+### Labeler
+- `app.bsky.labeler.getServices` -- Get information about labeler services
+
+### Trending/Discovery (Unspecced -- may change without notice)
 - `app.bsky.unspecced.getTrendingTopics` -- Lightweight trending topic list
 - `app.bsky.unspecced.getTrends` -- Rich trends with post counts and actors
+- `app.bsky.unspecced.getPopularFeedGenerators` -- Discover popular feed generators
+- `app.bsky.unspecced.getTaggedSuggestions` -- Get categorized suggestions for feeds and users
 
 ### Identity
 - `com.atproto.identity.resolveHandle` -- Resolve handle to DID
+
+### Repository (Low-Level)
+- `com.atproto.repo.describeRepo` -- Get account/repository info and collections
+- `com.atproto.repo.getRecord` -- Get a single record by AT-URI
+- `com.atproto.repo.listRecords` -- List records in a collection
+
+### Labels
+- `com.atproto.label.queryLabels` -- Query content labels (may return additional results with auth)
+
+## Authenticated Read Endpoints (Require Proxy Auth)
+
+These read endpoints require authentication because they access private account data.
+Use via the credential proxy with `X-Session-Id`:
+
+### Feed
+- `app.bsky.feed.getTimeline` -- Get the authenticated user's home timeline
+- `app.bsky.feed.getActorLikes` -- Get posts liked by the authenticated user (own account only)
+
+### Notifications
+- `app.bsky.notification.listNotifications` -- List notifications for the authenticated account
+- `app.bsky.notification.getUnreadCount` -- Get unread notification count
+
+### Graph (Private)
+- `app.bsky.graph.getBlocks` -- Get accounts blocked by the authenticated user
+- `app.bsky.graph.getMutes` -- Get accounts muted by the authenticated user
+- `app.bsky.graph.getListBlocks` -- Get lists blocked by the authenticated user
+- `app.bsky.graph.getListMutes` -- Get lists muted by the authenticated user
+- `app.bsky.graph.getListsWithMembership` -- Get lists created by the authenticated user
+- `app.bsky.graph.getStarterPacksWithMembership` -- Get starter packs created by the authenticated user
+
+### Account
+- `app.bsky.actor.getPreferences` -- Get private account preferences
+- `app.bsky.bookmark.getBookmarks` -- Get bookmarked posts
 
 ## Write Endpoints (Require Proxy Auth)
 
 These require a session via the credential proxy:
 
-- `com.atproto.repo.createRecord` -- Create posts, likes, follows
-- `com.atproto.repo.deleteRecord` -- Delete records
-- `app.bsky.notification.updateSeen` -- Mark notifications read
+### Record Operations
+- `com.atproto.repo.createRecord` -- Create posts, likes, follows, reposts, blocks, list items
+- `com.atproto.repo.deleteRecord` -- Delete records (unlike, unfollow, delete post, etc.)
+- `com.atproto.repo.putRecord` -- Create or update a record at a specific rkey
+- `com.atproto.repo.applyWrites` -- Batch multiple create/update/delete operations atomically
+- `com.atproto.repo.uploadBlob` -- Upload images, video, or other media (returns blob ref for embedding in records)
+
+### Account Management
+- `app.bsky.actor.putPreferences` -- Update account preferences
+- `app.bsky.bookmark.createBookmark` -- Bookmark a post
+- `app.bsky.bookmark.deleteBookmark` -- Remove a bookmark
+
+### Notifications
+- `app.bsky.notification.updateSeen` -- Mark notifications as read
+- `app.bsky.notification.registerPush` -- Register for push notifications
+- `app.bsky.notification.putPreferences` -- Update notification preferences
+
+### Graph Mutations
+- `app.bsky.graph.muteActor` -- Mute an account
+- `app.bsky.graph.unmuteActor` -- Unmute an account
+- `app.bsky.graph.muteActorList` -- Mute a list
+- `app.bsky.graph.unmuteActorList` -- Unmute a list
+- `app.bsky.graph.muteThread` -- Mute a thread
+- `app.bsky.graph.unmuteThread` -- Unmute a thread
+
+### Moderation
+- `com.atproto.moderation.createReport` -- Report an account or content
 
 ## Rate Limits
 
