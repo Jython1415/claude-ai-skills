@@ -17,9 +17,7 @@ import re
 _GMAIL_PATH_PREFIX = re.compile(r"^gmail/v1/users/[^/]+/")
 
 # Known Gmail resource types (first segment after userId)
-_GMAIL_KNOWN_RESOURCES = frozenset(
-    {"messages", "threads", "drafts", "labels", "profile", "history", "settings"}
-)
+_GMAIL_KNOWN_RESOURCES = frozenset({"messages", "threads", "drafts", "labels", "profile", "history", "settings"})
 
 
 def _parse_gmail_segments(path: str) -> list[str] | None:
@@ -32,7 +30,7 @@ def _parse_gmail_segments(path: str) -> list[str] | None:
     match = _GMAIL_PATH_PREFIX.match(path)
     if not match:
         return None
-    rest = path[match.end():]
+    rest = path[match.end() :]
     if not rest:
         return None
     return [s for s in rest.split("/") if s]

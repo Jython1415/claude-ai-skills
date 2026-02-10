@@ -184,9 +184,7 @@ class TestGmailReadAllowed:
         assert error == ""
 
     def test_get_attachment(self):
-        allowed, error = validate_gmail_endpoint(
-            "GET", "gmail/v1/users/me/messages/abc123/attachments/att456"
-        )
+        allowed, error = validate_gmail_endpoint("GET", "gmail/v1/users/me/messages/abc123/attachments/att456")
         assert allowed is True
         assert error == ""
 
