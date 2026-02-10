@@ -16,6 +16,7 @@ All notable changes to the Bluesky Access skill will be documented in this file.
 ### Changed
 - Expanded endpoint reference with feed engagement endpoints (getLikes, getRepostedBy, getQuotes), custom feed/list endpoints (getFeed, getListFeed), trending endpoints (getTrendingTopics, getTrends), and identity resolution (resolveHandle)
 - Updated proxy rate limit from 60/min to 300/min to align with Bluesky's 3,000/5min global limit
+- Added acknowledgment in CHANGELOG crediting this skill as being inspired by oaustegard's [browsing-bluesky](https://github.com/oaustegard/claude-skills/tree/main/browsing-bluesky) skill
 
 ## [1.0.0] - 2025-12-30
 
