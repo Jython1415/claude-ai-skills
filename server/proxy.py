@@ -10,13 +10,9 @@ from urllib.parse import unquote, urlparse
 
 import requests
 from credentials import CredentialStore
-from error_redaction import get_redactor
 from flask import Response, stream_with_context
 
 logger = logging.getLogger(__name__)
-
-# Initialize credential redactor
-redactor = get_redactor()
 
 # Only these request headers are forwarded to upstream services.
 # Using an allowlist prevents leaking internal or sensitive headers.

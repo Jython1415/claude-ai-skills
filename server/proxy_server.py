@@ -20,7 +20,6 @@ from datetime import datetime
 
 from audit_log import get_audit_log
 from credentials import CredentialStore
-from error_redaction import get_redactor
 from error_utils import error_response
 from flask import Flask, jsonify, request, send_file
 from flask_limiter import Limiter
@@ -99,9 +98,6 @@ else:
 audit_log = get_audit_log()
 session_store = SessionStore(on_session_expired=lambda sid: audit_log.session_expired(sid))
 credential_store = CredentialStore()
-
-# Initialize credential redactor for sanitizing error messages
-redactor = get_redactor()
 
 logger.info(f"Loaded {len(credential_store.list_services())} service(s) from credential store")
 

@@ -16,12 +16,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 import requests
-from error_redaction import get_redactor
 
 logger = logging.getLogger(__name__)
-
-# Initialize credential redactor for tracking runtime JWTs
-redactor = get_redactor()
 
 
 # Known service configurations (base URLs, auth flows)
@@ -169,10 +165,6 @@ class ServiceCredential:
                 expires_at=datetime.now(timezone.utc) + timedelta(hours=2),
             )
 
-            # Track JWTs for redaction in error messages
-            redactor.track_runtime_credential(data["accessJwt"])
-            redactor.track_runtime_credential(data["refreshJwt"])
-
             logger.info(f"Created ATProto session for {data['handle']}")
             return True
 
@@ -201,10 +193,6 @@ class ServiceCredential:
                 handle=data["handle"],
                 expires_at=datetime.now(timezone.utc) + timedelta(hours=2),
             )
-
-            # Track refreshed JWTs for redaction in error messages
-            redactor.track_runtime_credential(data["accessJwt"])
-            redactor.track_runtime_credential(data["refreshJwt"])
 
             logger.info(f"Refreshed ATProto session for {data['handle']}")
             return True
@@ -257,9 +245,6 @@ class ServiceCredential:
                 access_token=access_token,
                 expires_at=datetime.now(timezone.utc) + timedelta(seconds=expires_in),
             )
-
-            # Track access token for redaction in error messages
-            redactor.track_runtime_credential(access_token)
 
             logger.info("Refreshed OAuth2 access token")
             return True

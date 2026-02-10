@@ -26,12 +26,8 @@ from mcp.server.fastmcp.exceptions import ToolError
 
 # Add parent directory to path to import server modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from server.error_redaction import get_redactor
 
 logger = logging.getLogger(__name__)
-
-# Initialize credential redactor
-redactor = get_redactor()
 
 # Configuration
 FLASK_URL = os.environ.get("FLASK_URL", "http://localhost:8443")

@@ -6,7 +6,6 @@ This test suite covers OAuth2 token management including:
 - Token refresh with 5-minute pre-expiry buffer
 - Thread-safe token access
 - Configuration parsing for Google services (Gmail, GCal, GDrive)
-- Credential redaction for security
 """
 
 import os
@@ -21,17 +20,12 @@ from unittest.mock import MagicMock, Mock, patch
 server_dir = os.path.join(os.path.dirname(__file__), "..", "server")
 sys.path.insert(0, os.path.abspath(server_dir))
 
-# Mock the redactor before importing credentials module
-mock_redactor = Mock()
-mock_redactor.track_runtime_credential = Mock()
-
-with patch("error_redaction.get_redactor", return_value=mock_redactor):
-    from credentials import (
-        KNOWN_SERVICES,
-        CredentialStore,
-        OAuth2Token,
-        ServiceCredential,
-    )
+from credentials import (  # noqa: E402
+    KNOWN_SERVICES,
+    CredentialStore,
+    OAuth2Token,
+    ServiceCredential,
+)
 
 
 class TestOAuth2Token(unittest.TestCase):
@@ -360,41 +354,6 @@ class TestKnownServicesGoogle(unittest.TestCase):
         gdrive = KNOWN_SERVICES["gdrive"]
         self.assertEqual(gdrive["type"], "oauth2")
         self.assertEqual(gdrive["base_url"], "https://www.googleapis.com/drive/v3")
-
-
-class TestOAuth2Redaction(unittest.TestCase):
-    """Test that OAuth2 tokens are tracked for redaction."""
-
-    def setUp(self):
-        """Set up test credential with OAuth2 configuration."""
-        self.credential = ServiceCredential(
-            service_type="oauth2",
-            base_url="https://www.googleapis.com/gmail/v1",
-            client_id="test_client_id.apps.googleusercontent.com",
-            client_secret="test_client_secret_xyz",
-            refresh_token="test_refresh_token_123",
-            token_url="https://oauth2.googleapis.com/token",
-        )
-
-    def test_redactor_tracks_oauth2_token(self):
-        """Test that redactor.track_runtime_credential is called with access token."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "access_token": "sensitive_token_should_be_redacted",
-            "expires_in": 3600,
-        }
-        mock_response.raise_for_status = Mock()
-
-        patched_redactor = Mock()
-
-        with (
-            patch("credentials.requests.post", return_value=mock_response),
-            patch("credentials.redactor", patched_redactor),
-        ):
-            self.credential._get_oauth2_token()
-
-            # Verify redactor was called with the access token
-            patched_redactor.track_runtime_credential.assert_called_with("sensitive_token_should_be_redacted")
 
 
 class TestOAuth2ThreadSafety(unittest.TestCase):
