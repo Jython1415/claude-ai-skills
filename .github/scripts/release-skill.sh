@@ -6,7 +6,7 @@ set -e
 
 # Detect which skill's VERSION changed (only for push events)
 if [ "$EVENT_NAME" = "push" ]; then
-    CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD)
+    CHANGED_FILES=$(git diff --name-only HEAD^1 HEAD)
     VERSION_FILE=$(echo "$CHANGED_FILES" | grep 'skills/.*/VERSION' | head -n 1)
 
     if [ -z "$VERSION_FILE" ]; then
