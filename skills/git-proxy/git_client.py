@@ -6,7 +6,6 @@ Communicates with git bundle proxy server for temporary git operations
 
 import os
 import subprocess
-import warnings
 
 import requests
 
@@ -14,41 +13,26 @@ import requests
 class GitProxyClient:
     """Client for communicating with git bundle proxy server"""
 
-    def __init__(self, proxy_url: str | None = None, auth_key: str | None = None, session_id: str | None = None):
+    def __init__(self, proxy_url: str | None = None, session_id: str | None = None):
         """
         Initialize git proxy client
 
-        Authentication priority:
-        1. session_id (if provided or SESSION_ID env var) - new session-based auth
-        2. auth_key (if provided or GIT_PROXY_KEY env var) - legacy key-based auth
-
         Args:
             proxy_url: URL of proxy server (or set GIT_PROXY_URL/PROXY_URL env var)
-            auth_key: Authentication key (or set GIT_PROXY_KEY env var)
             session_id: Session ID for session-based auth (or set SESSION_ID env var)
         """
         self.proxy_url = proxy_url or os.environ.get("GIT_PROXY_URL") or os.environ.get("PROXY_URL")
         self.session_id = session_id or os.environ.get("SESSION_ID")
-        self.auth_key = auth_key or os.environ.get("GIT_PROXY_KEY")
 
         if not self.proxy_url:
             raise ValueError("Missing proxy_url. Set GIT_PROXY_URL or PROXY_URL environment variable.")
 
-        if not self.session_id and not self.auth_key:
-            raise ValueError(
-                "Missing authentication. Set SESSION_ID (for session auth) or GIT_PROXY_KEY (for key auth)."
-            )
+        if not self.session_id:
+            raise ValueError("Missing session_id. Set SESSION_ID environment variable.")
 
     def _auth_headers(self) -> dict:
-        """Get authentication headers based on available credentials"""
-        if self.session_id:
-            return {"X-Session-Id": self.session_id}
-        warnings.warn(
-            "Legacy X-Auth-Key authentication is deprecated. Use session-based auth with SESSION_ID.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return {"X-Auth-Key": self.auth_key}
+        """Get authentication headers."""
+        return {"X-Session-Id": self.session_id}
 
     def health_check(self) -> dict:
         """Check proxy server health"""

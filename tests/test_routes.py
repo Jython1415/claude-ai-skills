@@ -188,6 +188,24 @@ class TestGitAuth:
         )
         assert resp.status_code == 401
 
+    def test_git_fetch_rejects_admin_key(self, client, auth_headers):
+        """Admin key alone should not grant access to git endpoints."""
+        resp = client.post(
+            "/git/fetch-bundle",
+            json={"repo_url": "https://github.com/user/repo"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 401
+
+    def test_git_push_rejects_admin_key(self, client, auth_headers):
+        """Admin key alone should not grant access to git endpoints."""
+        resp = client.post(
+            "/git/push-bundle",
+            data={"repo_url": "https://github.com/user/repo", "branch": "test"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 401
+
 
 # =============================================================================
 # Issue reporting endpoint

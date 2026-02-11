@@ -59,13 +59,6 @@ headers = {"X-Session-Id": session["session_id"]}
 requests.get(f"{session['proxy_url']}/proxy/bsky/...", headers=headers)
 ```
 
-**Legacy key-based (still supported for git endpoints):**
-```python
-headers = {"X-Auth-Key": os.environ["GIT_PROXY_KEY"]}
-```
-
-Git endpoints accept either session or key auth. Proxy endpoints require session auth only.
-
 ## Endpoints
 
 ### Health
@@ -79,7 +72,7 @@ Git endpoints accept either session or key auth. Proxy endpoints require session
 ### Transparent Proxy (require `X-Session-Id` header)
 - `ANY /proxy/<service>/<path>` - Forward to upstream with credentials
 
-### Git Operations (require `X-Session-Id` or `X-Auth-Key`)
+### Git Operations (require `X-Session-Id`)
 - `POST /git/fetch-bundle` - Clone repo, return bundle
 - `POST /git/push-bundle` - Apply bundle, push, create PR
 
