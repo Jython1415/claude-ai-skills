@@ -240,9 +240,7 @@ class TestPaginate:
     @patch("bsky_client.requests.get")
     def test_single_page(self, mock_get):
         """Single page with no cursor returns all items."""
-        mock_get.return_value = self._mock_response(
-            {"follows": [{"did": "did:plc:a"}, {"did": "did:plc:b"}]}
-        )
+        mock_get.return_value = self._mock_response({"follows": [{"did": "did:plc:a"}, {"did": "did:plc:b"}]})
         result = paginate("app.bsky.graph.getFollows", {"actor": "did:plc:x"}, "follows")
         assert len(result) == 2
         mock_get.assert_called_once()
@@ -264,7 +262,7 @@ class TestPaginate:
         """max_items stops pagination early and truncates."""
         mock_get.side_effect = [
             self._mock_response({"follows": [{"did": f"did:plc:{i}"} for i in range(100)], "cursor": "page2"}),
-            self._mock_response({"follows": [{"did": f"did:plc:{i+100}"} for i in range(100)]}),
+            self._mock_response({"follows": [{"did": f"did:plc:{i + 100}"} for i in range(100)]}),
         ]
         result = paginate("app.bsky.graph.getFollows", {"actor": "did:plc:x"}, "follows", max_items=150)
         assert len(result) == 150

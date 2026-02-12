@@ -346,9 +346,7 @@ class TestEstimateFunctions:
     def test_estimate_followers(self, mock_api):
         mock_api.get.return_value = {"followersCount": 500}
         assert estimate_followers("alice.bsky.social") == 500
-        mock_api.get.assert_called_once_with(
-            "app.bsky.actor.getProfile", {"actor": "alice.bsky.social"}
-        )
+        mock_api.get.assert_called_once_with("app.bsky.actor.getProfile", {"actor": "alice.bsky.social"})
 
     @patch("bsky_sets.api")
     def test_estimate_follows(self, mock_api):
