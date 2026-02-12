@@ -96,6 +96,7 @@ _PUBLIC_ONLY = {
     "com.atproto.label.queryLabels",
 }
 
+
 def _classify(endpoint: str) -> str:
     """Return the auth category for an endpoint."""
     if endpoint in _PUBLIC_ONLY:
