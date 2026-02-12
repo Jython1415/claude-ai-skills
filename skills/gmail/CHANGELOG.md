@@ -8,6 +8,9 @@ All notable changes to the Gmail Access skill will be documented in this file.
 - `read_thread.py` - Read full email thread with decoded bodies and chronological message display
   - Supports direct thread ID lookup and `--search` mode to find threads by Gmail query
 
+### Fixed
+- Include `threadId` in `list_messages.py` output for easy pipeline to `read_thread.py`
+
 ### Changed
 - Restructure SKILL.md to prioritize scripts over raw API examples
   - Add "Common Tasks" quick-reference table mapping tasks to scripts
