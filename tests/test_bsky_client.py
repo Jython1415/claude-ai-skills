@@ -34,9 +34,6 @@ class TestClassify:
         assert _classify("app.bsky.feed.getAuthorFeed") == "public_only"
         assert _classify("app.bsky.actor.searchActors") == "public_only"
 
-    def test_auth_preferred_endpoints(self):
-        assert _classify("app.bsky.graph.getKnownFollowers") == "auth_preferred"
-
     def test_auth_required_for_write_endpoints(self):
         assert _classify("com.atproto.repo.createRecord") == "auth_required"
         assert _classify("com.atproto.repo.deleteRecord") == "auth_required"
@@ -88,29 +85,6 @@ class TestApiGet:
         assert result == {"handle": "bsky.app"}
         call_url = mock_get.call_args[0][0]
         assert "public.api.bsky.app" in call_url
-
-    @patch("bsky_client.requests.get")
-    def test_auth_preferred_uses_proxy_with_session(self, mock_get, monkeypatch):
-        """Auth-preferred endpoints use proxy when session is available."""
-        monkeypatch.setenv("SESSION_ID", "test-session")
-        monkeypatch.setenv("PROXY_URL", "https://proxy.example.com")
-        mock_get.return_value = self._mock_response({"followers": []})
-
-        api.get("app.bsky.graph.getKnownFollowers", {"actor": "bsky.app"})
-
-        call_url = mock_get.call_args[0][0]
-        assert call_url.startswith("https://proxy.example.com/proxy/bsky/")
-        headers = mock_get.call_args[1].get("headers", {})
-        assert headers.get("X-Session-Id") == "test-session"
-
-    def test_auth_preferred_raises_without_session(self, monkeypatch):
-        """Auth-preferred endpoints raise AuthRequiredError without session."""
-        monkeypatch.delenv("SESSION_ID", raising=False)
-        monkeypatch.delenv("PROXY_URL", raising=False)
-
-        with pytest.raises(AuthRequiredError) as exc_info:
-            api.get("app.bsky.graph.getKnownFollowers", {"actor": "bsky.app"})
-        assert "getKnownFollowers" in str(exc_info.value)
 
     @patch("bsky_client.requests.get")
     def test_auth_required_uses_proxy_with_session(self, mock_get, monkeypatch):

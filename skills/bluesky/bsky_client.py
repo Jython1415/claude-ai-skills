@@ -41,8 +41,6 @@ class AuthRequiredError(Exception):
 # ---------------------------------------------------------------------------
 # Categories:
 #   public_only    – Never needs auth; always use public API.
-#   auth_preferred – Works without auth but may return incomplete data;
-#                    use proxy when available, error when not.
 #   auth_required  – Always requires proxy; error without session.
 #
 # Endpoints not listed here default to auth_required (fail-safe).
@@ -98,18 +96,10 @@ _PUBLIC_ONLY = {
     "com.atproto.label.queryLabels",
 }
 
-_AUTH_PREFERRED = {
-    # Returns incomplete data without auth
-    "app.bsky.graph.getKnownFollowers",
-}
-
-
 def _classify(endpoint: str) -> str:
     """Return the auth category for an endpoint."""
     if endpoint in _PUBLIC_ONLY:
         return "public_only"
-    if endpoint in _AUTH_PREFERRED:
-        return "auth_preferred"
     return "auth_required"
 
 
@@ -154,12 +144,6 @@ class _API:
         if category == "public_only":
             url = f"{PUBLIC_API}/{endpoint}"
             headers = {}
-        elif category == "auth_preferred":
-            if session_id and proxy_url:
-                url = f"{proxy_url}/proxy/bsky/{endpoint}"
-                headers = {"X-Session-Id": session_id}
-            else:
-                raise AuthRequiredError(endpoint)
         else:  # auth_required
             if session_id and proxy_url:
                 url = f"{proxy_url}/proxy/bsky/{endpoint}"
