@@ -2,6 +2,27 @@
 
 All notable changes to the Bluesky Access skill will be documented in this file.
 
+## [2.0.0] - 2026-02-12
+
+### Added
+- `bsky_sets.py` - Set-based operations on actor collections (follows, followers, likes, reposts) with Python set operators (`&`, `|`, `-`)
+- `ActorSet` class with intersection, union, difference, membership test, sorting, and DID extraction
+- `Actor` dataclass with `did`, `handle`, `display_name` fields
+- `actors.follows()`, `actors.followers()`, `actors.likes()`, `actors.reposts()`, `actors.known_followers()` - paginated endpoint wrappers returning `ActorSet`
+- `estimate_likes()`, `estimate_reposts()`, `estimate_followers()`, `estimate_follows()` - single-call count checks for cost-aware querying
+- `paginate()` utility in `bsky_client` for automatic cursor-based pagination with configurable `max_items` and `page_size`
+- Comprehensive tests for `bsky_sets` (set operations, normalization, producers, estimates) and `paginate()`
+
+### Changed
+- **BREAKING**: Removed all standalone scripts (`scripts/` directory). The skill is now library-first.
+- Rewrote SKILL.md with graduated code examples (simple → complex) as the primary interface, replacing the script-based quick start table
+- Endpoint reference condensed into compact grouped lists
+
+### Migration
+- Instead of `python get_profile.py bsky.app`, use `api.get("app.bsky.actor.getProfile", {"actor": "bsky.app"})`
+- Instead of `python search_posts.py "query"`, use `api.get("app.bsky.feed.searchPosts", {"q": "query", "limit": 25})`
+- See SKILL.md examples for all common patterns
+
 ## [1.3.0] - 2026-02-12
 
 ### Added

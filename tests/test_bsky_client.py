@@ -13,6 +13,7 @@ from bsky_client import (
     AuthRequiredError,
     _classify,
     api,
+    paginate,
     resolve_did_to_handle,
     resolve_handle_to_did,
     url_to_at_uri,
@@ -221,3 +222,82 @@ class TestUrlToAtUri:
         result = url_to_at_uri("https://bsky.app/profile/did:plc:abc/post/3xyz?foo=bar#section")
 
         assert result == "at://did:plc:abc/app.bsky.feed.post/3xyz"
+
+
+# ---------------------------------------------------------------------------
+# Pagination
+# ---------------------------------------------------------------------------
+
+
+class TestPaginate:
+    def _mock_response(self, json_data, status_code=200):
+        resp = MagicMock()
+        resp.status_code = status_code
+        resp.json.return_value = json_data
+        resp.raise_for_status.return_value = None
+        return resp
+
+    @patch("bsky_client.requests.get")
+    def test_single_page(self, mock_get):
+        """Single page with no cursor returns all items."""
+        mock_get.return_value = self._mock_response(
+            {"follows": [{"did": "did:plc:a"}, {"did": "did:plc:b"}]}
+        )
+        result = paginate("app.bsky.graph.getFollows", {"actor": "did:plc:x"}, "follows")
+        assert len(result) == 2
+        mock_get.assert_called_once()
+
+    @patch("bsky_client.requests.get")
+    def test_multiple_pages(self, mock_get):
+        """Follows cursor across pages until exhausted."""
+        mock_get.side_effect = [
+            self._mock_response({"follows": [{"did": "did:plc:a"}], "cursor": "page2"}),
+            self._mock_response({"follows": [{"did": "did:plc:b"}], "cursor": "page3"}),
+            self._mock_response({"follows": [{"did": "did:plc:c"}]}),
+        ]
+        result = paginate("app.bsky.graph.getFollows", {"actor": "did:plc:x"}, "follows")
+        assert len(result) == 3
+        assert mock_get.call_count == 3
+
+    @patch("bsky_client.requests.get")
+    def test_max_items_caps_results(self, mock_get):
+        """max_items stops pagination early and truncates."""
+        mock_get.side_effect = [
+            self._mock_response({"follows": [{"did": f"did:plc:{i}"} for i in range(100)], "cursor": "page2"}),
+            self._mock_response({"follows": [{"did": f"did:plc:{i+100}"} for i in range(100)]}),
+        ]
+        result = paginate("app.bsky.graph.getFollows", {"actor": "did:plc:x"}, "follows", max_items=150)
+        assert len(result) == 150
+        assert mock_get.call_count == 2
+
+    @patch("bsky_client.requests.get")
+    def test_empty_page_stops(self, mock_get):
+        """Empty result list stops pagination even with a cursor."""
+        mock_get.side_effect = [
+            self._mock_response({"follows": [{"did": "did:plc:a"}], "cursor": "page2"}),
+            self._mock_response({"follows": [], "cursor": "page3"}),
+        ]
+        result = paginate("app.bsky.graph.getFollows", {"actor": "did:plc:x"}, "follows")
+        assert len(result) == 1
+        assert mock_get.call_count == 2
+
+    @patch("bsky_client.requests.get")
+    def test_cursor_passed_to_subsequent_requests(self, mock_get):
+        """Cursor from response is passed as param to next request."""
+        mock_get.side_effect = [
+            self._mock_response({"follows": [{"did": "did:plc:a"}], "cursor": "abc123"}),
+            self._mock_response({"follows": [{"did": "did:plc:b"}]}),
+        ]
+        paginate("app.bsky.graph.getFollows", {"actor": "did:plc:x"}, "follows")
+
+        second_call_params = mock_get.call_args_list[1][1]["params"]
+        assert second_call_params["cursor"] == "abc123"
+
+    @patch("bsky_client.requests.get")
+    def test_page_size_param(self, mock_get):
+        """page_size is passed as the limit parameter."""
+        mock_get.return_value = self._mock_response({"follows": []})
+        paginate("app.bsky.graph.getFollows", {"actor": "did:plc:x"}, "follows", page_size=50)
+
+        call_params = mock_get.call_args[1]["params"]
+        assert call_params["limit"] == 50

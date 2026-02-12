@@ -224,3 +224,45 @@ def url_to_at_uri(url: str) -> str:
         actor = resolve_handle_to_did(actor)
 
     return f"at://{actor}/app.bsky.feed.post/{rkey}"
+
+
+def paginate(
+    endpoint: str,
+    params: dict,
+    result_key: str,
+    *,
+    max_items: int | None = None,
+    page_size: int = 100,
+) -> list[dict]:
+    """Fetch all pages from a paginated Bluesky endpoint.
+
+    Args:
+        endpoint: XRPC endpoint NSID (e.g., "app.bsky.graph.getFollows")
+        params: Base query parameters (cursor is managed automatically)
+        result_key: JSON key containing the result list (e.g., "follows")
+        max_items: Stop after collecting this many items. None = no limit.
+        page_size: Items per page (max 100 for most endpoints).
+
+    Returns:
+        List of all collected items across pages.
+    """
+    items: list[dict] = []
+    cursor = None
+
+    while True:
+        page_params = {**params, "limit": page_size}
+        if cursor:
+            page_params["cursor"] = cursor
+
+        data = api.get(endpoint, page_params)
+        page_items = data.get(result_key, [])
+        items.extend(page_items)
+
+        if max_items is not None and len(items) >= max_items:
+            return items[:max_items]
+
+        cursor = data.get("cursor")
+        if not cursor or not page_items:
+            break
+
+    return items
