@@ -121,57 +121,6 @@ the Flask API. The setup script validates this key is set before starting servic
 Known services (`bsky`, `github_api`, `gmail`, `gcal`, `gdrive`) have hardcoded base URLs and auth types
 in `credentials.py`. Custom services need explicit `base_url` and `type` fields.
 
-## Running Locally
-
-```bash
-# Sync dependencies
-uv sync
-
-# Start Flask server
-uv run python server/proxy_server.py
-
-# Start MCP server (separate terminal)
-FLASK_URL=http://localhost:8443 uv run python mcp/mcp_server.py
-```
-
-## LaunchAgent Setup
-
-All three services (Flask proxy, MCP server, Cloudflare Tunnel) auto-start on login via LaunchAgents:
-
-```bash
-# Install (one-time) or restart servers
-./scripts/setup-launchagents.sh
-
-# Check status
-launchctl list | grep joshuashew
-
-# Logs
-tail -f ~/Library/Logs/com.joshuashew.credential-proxy.log
-tail -f ~/Library/Logs/com.joshuashew.mcp-server.log
-tail -f ~/Library/Logs/com.joshuashew.cloudflare-tunnel.log
-
-# Audit log (JSON Lines — session lifecycle, proxy requests, git operations)
-tail -f ~/Library/Logs/credential-proxy-audit.jsonl
-```
-
-**Important for Claude Code:**
-- The setup script (`setup-launchagents.sh`) must be run by the USER, not by Claude
-- Claude cannot execute this script due to launchctl permissions
-- If servers need restarting, ask the user to run: `./scripts/setup-launchagents.sh`
-- The script is idempotent - safe to run multiple times (detects and restarts existing servers)
-- The script validates `PROXY_SECRET_KEY` is set before starting services
-
-## Cloudflare Tunnel
-
-The MCP server is exposed via Cloudflare Tunnel (dashboard-managed).
-The tunnel connector runs as a system LaunchDaemon (`com.cloudflare.cloudflared`),
-installed via `sudo cloudflared service install <token>`.
-Wildcard DNS `*.joshuashew.com` routes through the tunnel.
-
-**Important:** Cloudflare's "Block AI Bots" setting (Security -> Bots) must be
-disabled for the zone. It silently blocks Claude.ai's backend requests
-(`python-httpx` User-Agent) through the tunnel.
-
 ## Dependencies
 
 Managed via `pyproject.toml` and uv:
@@ -190,20 +139,13 @@ Managed via `pyproject.toml` and uv:
 - **Transport Security**: Cloudflare Tunnel provides encrypted HTTPS tunnel
 - **Audit Logging**: All session lifecycle events, proxy requests, and git operations logged to `~/Library/Logs/credential-proxy-audit.jsonl`
 
-## Claude Code Environment
+## Environment Setup
 
 Claude Code runs in two environments: **locally** (CLI) or **remotely** (Claude Code Web).
-Environment-specific instructions (available tools, what to skip, gh CLI setup) are delivered
-automatically via the SessionStart hook in `.claude/hooks/session-start.sh`. The hook also
-installs `gh` CLI in web sessions.
-
-### Detecting the environment
-
-```bash
-if [ "$CLAUDE_CODE_REMOTE" = "true" ]; then
-    echo "Running in Claude Code Web"
-fi
-```
+The SessionStart hook (`.claude/hooks/session-start.sh`) outputs the appropriate setup file
+at session start:
+- `LOCAL-SETUP.md` — local behavioral instructions, server management, LaunchAgent/Cloudflare reference
+- `REMOTE-SETUP.md` — remote behavioral instructions, available/unavailable tools, network constraints
 
 ## Core Requirements
 
