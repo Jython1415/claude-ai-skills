@@ -20,7 +20,6 @@ import tempfile
 from datetime import datetime
 
 import requests
-
 from audit_log import get_audit_log
 from credentials import CredentialStore
 from error_utils import error_response

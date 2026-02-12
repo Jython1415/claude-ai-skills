@@ -98,9 +98,7 @@ class AuditLog:
             }
         )
 
-    def issue_created(
-        self, issue_url: str, issue_number: int, title: str, labels: list[str] | None = None
-    ) -> None:
+    def issue_created(self, issue_url: str, issue_number: int, title: str, labels: list[str] | None = None) -> None:
         self._write(
             {
                 "event": "issue_created",
