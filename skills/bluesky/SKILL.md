@@ -7,28 +7,146 @@ description: Search and interact with Bluesky/ATProtocol. Public API for reads (
 
 Access Bluesky (ATProtocol) APIs. Read operations use the public API directly (no authentication needed). Write operations use the credential proxy.
 
-## Public API (No Auth Required)
+## Quick Start
 
-The public API at `https://public.api.bsky.app/xrpc` supports all read operations without authentication.
+Use the scripts in `scripts/` -- they handle URL parsing, pagination, and formatting.
 
-### Search Posts
+| Task | Script | Example |
+|------|--------|---------|
+| Resolve a bsky.app URL | `resolve_url.py` | `python resolve_url.py https://bsky.app/profile/bsky.app/post/3abc123` |
+| Get a user's profile | `get_profile.py` | `python get_profile.py bsky.app` |
+| Search posts | `search_posts.py` | `python search_posts.py "python" 10` |
+| Search users | `search_users.py` | `python search_users.py "machine learning" 10` |
+| Get a user's posts | `get_author_feed.py` | `python get_author_feed.py bsky.app 10 posts_with_media` |
+| Get a post thread | `get_post_thread.py` | `python get_post_thread.py https://bsky.app/profile/bsky.app/post/3abc123` |
+| Trace quote-post chain | `trace_quote_chain.py` | `python trace_quote_chain.py https://bsky.app/profile/user/post/3abc123` |
+| Get trending topics | `get_trending.py` | `python get_trending.py rich 5` |
 
-```python
-import requests
+## Scripts
 
-response = requests.get(
-    "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts",
-    params={"q": "python programming", "limit": 25},
-    timeout=30,
-)
+All scripts use the public API (no auth needed), follow PEP 723 inline metadata, and can be run directly with `uv run`.
 
-for post in response.json().get("posts", []):
-    author = post["author"]["handle"]
-    text = post["record"]["text"][:100]
-    print(f"@{author}: {text}")
+### `resolve_url.py` -- Resolve URLs, handles, and DIDs
+
+Resolves any Bluesky identifier to structured data (DID, handle, AT-URI).
+
+```
+python resolve_url.py <url_handle_or_uri>
 ```
 
-Search supports advanced query syntax:
+**Accepts:** bsky.app post URLs, profile URLs, AT-URIs, handles, DIDs
+
+**Returns:** `type`, `did`, `handle`, `at_uri` (if post), `collection` (if post), `rkey` (if post)
+
+**Function:** `resolve_url(identifier: str) -> dict`
+
+### `trace_quote_chain.py` -- Trace quote-post chains
+
+Walks backward through quote posts to find the original post.
+
+```
+python trace_quote_chain.py <post_url_or_uri> [max_depth]
+```
+
+**Accepts:** bsky.app post URLs, AT-URIs. Default max depth: 50.
+
+**Returns:** Ordered list of posts from start to origin, with labels (START / QUOTED / ORIGIN).
+
+**Function:** `trace_quote_chain(post_ref: str, max_depth: int = 50) -> list[dict]`
+
+### `get_post_thread.py` -- Get post thread with context
+
+Fetches a post with its parent chain and reply tree.
+
+```
+python get_post_thread.py <post_url_or_uri> [depth] [parent_height]
+```
+
+**Accepts:** bsky.app post URLs, AT-URIs. Default depth: 6, parent height: 80.
+
+**Function:** `get_post_thread(post_ref: str, depth: int = 6, parent_height: int = 80) -> dict`
+
+### `get_profile.py` -- Get user profile
+
+```
+python get_profile.py <handle_or_did>
+```
+
+**Function:** `get_profile(actor: str) -> dict`
+
+### `search_posts.py` -- Search posts
+
+```
+python search_posts.py <query> [limit]
+```
+
+**Function:** `search_posts(query: str, limit: int = 25) -> dict`
+
+### `search_users.py` -- Search users
+
+```
+python search_users.py <query> [limit]
+```
+
+**Function:** `search_users(query: str, limit: int = 25) -> dict`
+
+### `get_author_feed.py` -- Get user's posts
+
+```
+python get_author_feed.py <handle_or_did> [limit] [filter]
+```
+
+Filters: `posts_with_replies`, `posts_no_replies` (default), `posts_with_media`, `posts_and_author_threads`
+
+**Function:** `get_author_feed(actor: str, limit: int = 20, filter_type: str = "posts_no_replies") -> dict`
+
+### `get_trending.py` -- Get trending topics
+
+```
+python get_trending.py [mode] [limit]
+```
+
+Modes: `topics` (default, lightweight), `rich` (with post counts and top actors)
+
+**Function:** `get_trending_topics(limit: int = 10) -> dict` / `get_trends(limit: int = 10) -> dict`
+
+## Patterns & Recipes
+
+### URL Resolution
+
+bsky.app URLs must be converted to AT-URIs before calling most API endpoints. Use `resolve_url.py`:
+
+```
+python resolve_url.py https://bsky.app/profile/bsky.app/post/3abc123
+# Returns: type, did, handle, at_uri, collection, rkey
+```
+
+The resolution pattern: extract handle and rkey from the URL, resolve the handle to a DID via `com.atproto.identity.resolveHandle`, then construct `at://{did}/app.bsky.feed.post/{rkey}`.
+
+### Quote-Post Traversal
+
+Bluesky quote posts embed the quoted post's AT-URI. To trace a chain:
+
+```
+python trace_quote_chain.py https://bsky.app/profile/user/post/3abc123
+```
+
+The script checks `embed.$type` for `app.bsky.embed.record#view` (plain quote) or `app.bsky.embed.recordWithMedia#view` (quote + media), extracts the quoted URI, and repeats. Stops at deleted/blocked posts or when no quote embed is found.
+
+### Finding Posts That Quote a Given Post (Inverse)
+
+To find posts that quote a specific post (the reverse direction), use `app.bsky.feed.getQuotes`:
+
+```
+GET https://public.api.bsky.app/xrpc/app.bsky.feed.getQuotes
+    ?uri=at://did:plc:xxx/app.bsky.feed.post/yyy
+    &limit=50
+```
+
+Returns paginated quote posts. Combine with `trace_quote_chain.py` for full chain analysis: use `getQuotes` to find forward quotes, then `trace_quote_chain.py` to walk backward from each.
+
+### Search Query Syntax
+
 - Basic terms: `python programming`
 - Exact phrases: `"event sourcing"`
 - User filter: `from:handle.bsky.social`
@@ -38,78 +156,14 @@ Search supports advanced query syntax:
 - Hashtags: `#python`
 - Domain links: `domain:github.com`
 
-### Get User Profile
+### Feed Filter Options
 
-```python
-response = requests.get(
-    "https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile",
-    params={"actor": "bsky.app"},
-    timeout=30,
-)
-print(response.json())
-```
+For `getAuthorFeed` / `get_author_feed.py`:
 
-### Get User Feed
-
-```python
-response = requests.get(
-    "https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed",
-    params={"actor": "bsky.app", "limit": 10, "filter": "posts_no_replies"},
-    timeout=30,
-)
-for item in response.json().get("feed", []):
-    print(item["post"]["record"]["text"][:100])
-```
-
-Filter options for `getAuthorFeed`:
 - `posts_with_replies` -- All posts including replies
 - `posts_no_replies` -- Original posts only (default)
 - `posts_with_media` -- Only posts with images/video
 - `posts_and_author_threads` -- Posts and self-reply threads
-
-### Get Post Thread
-
-```python
-response = requests.get(
-    "https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread",
-    params={"uri": "at://did:plc:xxx/app.bsky.feed.post/yyy", "depth": 6},
-    timeout=30,
-)
-thread = response.json()["thread"]
-```
-
-Accepts AT-URIs. To convert a bsky.app URL to an AT-URI, resolve the handle first:
-```python
-# Resolve handle -> DID
-did = requests.get(
-    "https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle",
-    params={"handle": "bsky.app"}, timeout=30,
-).json()["did"]
-
-# Build AT-URI: at://{did}/app.bsky.feed.post/{rkey}
-```
-
-### Get Trending Topics
-
-```python
-# Lightweight topic list (low token cost)
-response = requests.get(
-    "https://public.api.bsky.app/xrpc/app.bsky.unspecced.getTrendingTopics",
-    params={"limit": 10},
-    timeout=30,
-)
-for topic in response.json().get("topics", []):
-    print(topic["displayName"])
-
-# Rich trends with post counts and top actors
-response = requests.get(
-    "https://public.api.bsky.app/xrpc/app.bsky.unspecced.getTrends",
-    params={"limit": 10},
-    timeout=30,
-)
-for trend in response.json().get("trends", []):
-    print(f"{trend['displayName']} -- {trend.get('postCount', 0)} posts")
-```
 
 ## Authenticated Operations (Via Proxy)
 
@@ -161,11 +215,11 @@ All these work without authentication via `https://public.api.bsky.app/xrpc/`:
 - `app.bsky.feed.getAuthorFeed` -- Get user's posts (supports filter param)
 - `app.bsky.feed.getPostThread` -- Get post with parent chain and replies
 - `app.bsky.feed.getPosts` -- Get specific posts by URI (up to 25)
+- `app.bsky.feed.getQuotes` -- Get posts that quote a specific post
 - `app.bsky.feed.getFeed` -- Get posts from a custom feed generator
 - `app.bsky.feed.getListFeed` -- Get posts from a list
 - `app.bsky.feed.getLikes` -- Get users who liked a post
 - `app.bsky.feed.getRepostedBy` -- Get users who reposted a post
-- `app.bsky.feed.getQuotes` -- Get posts that quote a specific post
 - `app.bsky.feed.getActorFeeds` -- Get feed generators created by an actor
 - `app.bsky.feed.getFeedGenerator` -- Get info about a specific feed generator
 - `app.bsky.feed.getFeedGenerators` -- Get info about multiple feed generators
@@ -299,24 +353,11 @@ returns HTTP 429.
 
 ## Tips
 
+- **Use scripts first.** They handle URL resolution, error formatting, and output structure. Check the Quick Start table above.
 - **Use the public API for reads.** No auth setup needed, better caching via `public.api.bsky.app`.
 - **Pagination**: Endpoints returning lists support cursor-based pagination. Pass the `cursor` from the response as a query parameter to get the next page.
-- **AT-URIs**: Many endpoints accept AT-URIs (`at://did:plc:xxx/collection/rkey`). Use `resolveHandle` to convert handles to DIDs when constructing URIs from bsky.app URLs.
+- **AT-URIs**: Many endpoints accept AT-URIs (`at://did:plc:xxx/collection/rkey`). Use `resolve_url.py` to convert bsky.app URLs to AT-URIs.
 - **Trending endpoints are "unspecced"**: `getTrendingTopics` and `getTrends` may change without notice. Use `getTrendingTopics` for a quick scan (lower token cost) and `getTrends` for detailed analysis.
-- **Feed filters**: `getAuthorFeed` supports `filter` param to narrow results. Use `posts_no_replies` to skip reply noise, `posts_with_media` for visual content.
-
-## Scripts
-
-See the `scripts/` directory for ready-to-use Python scripts:
-
-- `search_posts.py` -- Search Bluesky posts
-- `get_profile.py` -- Get user profile information
-- `get_author_feed.py` -- Get a user's recent posts with filtering
-- `get_post_thread.py` -- Get a post thread with context and replies
-- `get_trending.py` -- Get trending topics (lightweight or rich mode)
-- `search_users.py` -- Search for users by name, handle, or bio
-
-All scripts use the public API by default and require no authentication for read operations.
 
 ## Reporting Issues
 
