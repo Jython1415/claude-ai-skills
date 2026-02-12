@@ -2,6 +2,20 @@
 
 All notable changes to the Bluesky Access skill will be documented in this file.
 
+## [1.2.0] - 2026-02-11
+
+### Added
+- `resolve_url.py` - Resolve bsky.app URLs, handles, DIDs, and AT-URIs to structured identifiers (type, DID, handle, AT-URI, collection, rkey)
+- `trace_quote_chain.py` - Trace quote-post chains backward to the original post, with cycle detection and deleted/blocked post handling
+- Quick Start table in SKILL.md mapping tasks to scripts with example invocations
+- Patterns & Recipes section in SKILL.md documenting URL resolution, quote-post traversal, and `getQuotes` endpoint
+- Expanded Scripts section in SKILL.md with function signatures and CLI arguments for all 8 scripts
+
+### Changed
+- Restructured SKILL.md to put scripts and quick start first (before raw API reference) for better LLM agent discoverability
+- Moved search query syntax and feed filter options into Patterns & Recipes section
+- Condensed Public API section by removing inline Python code examples (scripts handle this)
+
 ## [1.1.0] - 2026-02-09
 
 ### Added
