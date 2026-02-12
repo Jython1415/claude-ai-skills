@@ -110,7 +110,7 @@ logger.info(f"Loaded {len(credential_store.list_services())} service(s) from cre
 
 
 def verify_auth(auth_header):
-    """Verify legacy authentication token (X-Auth-Key)"""
+    """Verify admin authentication token (X-Auth-Key)"""
     if not auth_header:
         return False
     return hmac.compare_digest(auth_header, SECRET_KEY)
