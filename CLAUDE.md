@@ -39,7 +39,9 @@ Claude.ai
 ### Skills (`skills/`)
 - `git-proxy/` - Git bundle proxy skill (Python library + packaging)
   - `git_client.py` - Python client supporting both session and key auth
-- `bluesky/` - Bluesky API skill (standalone scripts)
+- `bluesky/` - Bluesky API skill (Python libraries)
+  - `bsky_client.py` - API client with automatic auth routing and pagination
+  - `bsky_sets.py` - Set-based operations on actor collections
 
 ## Authentication
 

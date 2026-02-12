@@ -83,7 +83,7 @@ did = resolve_handle_to_did("bsky.app")
 uri = url_to_at_uri("https://bsky.app/profile/bsky.app/post/3abc123")
 
 # AT-URI -> post data
-data = api.get("app.bsky.feed.getPosts", {"uris": uri})
+data = api.get("app.bsky.feed.getPosts", {"uris": [uri]})
 ```
 
 ### Paginate through all results

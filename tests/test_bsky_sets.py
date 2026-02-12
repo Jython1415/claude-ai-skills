@@ -331,7 +331,7 @@ class TestEstimateFunctions:
         assert estimate_likes("at://did:plc:x/app.bsky.feed.post/y") == 42
         mock_api.get.assert_called_once_with(
             "app.bsky.feed.getPosts",
-            {"uris": "at://did:plc:x/app.bsky.feed.post/y"},
+            {"uris": ["at://did:plc:x/app.bsky.feed.post/y"]},
         )
 
     @patch("bsky_sets.api")

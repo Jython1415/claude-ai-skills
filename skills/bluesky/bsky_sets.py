@@ -244,7 +244,7 @@ def estimate_likes(uri: str) -> int:
 
     Makes a single API call to getPosts to read the likeCount field.
     """
-    data = api.get("app.bsky.feed.getPosts", {"uris": uri})
+    data = api.get("app.bsky.feed.getPosts", {"uris": [uri]})
     posts = data.get("posts", [])
     if not posts:
         return 0
@@ -256,7 +256,7 @@ def estimate_reposts(uri: str) -> int:
 
     Makes a single API call to getPosts to read the repostCount field.
     """
-    data = api.get("app.bsky.feed.getPosts", {"uris": uri})
+    data = api.get("app.bsky.feed.getPosts", {"uris": [uri]})
     posts = data.get("posts", [])
     if not posts:
         return 0
