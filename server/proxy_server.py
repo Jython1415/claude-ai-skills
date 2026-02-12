@@ -110,34 +110,27 @@ logger.info(f"Loaded {len(credential_store.list_services())} service(s) from cre
 
 
 def verify_auth(auth_header):
-    """Verify legacy authentication token (X-Auth-Key)"""
+    """Verify admin authentication token (X-Auth-Key)"""
     if not auth_header:
         return False
     return hmac.compare_digest(auth_header, SECRET_KEY)
 
 
-def verify_session_or_key(service: str = "git") -> str | None:
+def verify_session(service: str = "git") -> bool:
     """
-    Verify request has valid session (with service access) OR legacy auth key.
+    Verify request has valid session with access to the given service.
 
     Args:
         service: The service to check access for (default 'git')
 
     Returns:
-        "session" if session auth, "legacy_key" if key auth, None if unauthorized
+        True if session auth is valid, False otherwise
     """
-    # Try session-based auth first
     session_id = request.headers.get("X-Session-Id")
     if session_id and session_store.has_service(session_id, service):
-        return "session"
+        return True
 
-    # Fall back to legacy key-based auth
-    auth_key = request.headers.get("X-Auth-Key")
-    if verify_auth(auth_key):
-        logger.warning("DEPRECATION: Legacy X-Auth-Key used for git endpoint. Migrate to session-based auth.")
-        return "legacy_key"
-
-    return None
+    return False
 
 
 @app.route("/health", methods=["GET"])
@@ -426,11 +419,9 @@ def fetch_bundle():
 
     Files are cloned to temporary directory and cleaned up immediately after bundling.
 
-    Authentication: X-Session-Id (with 'git' service) OR X-Auth-Key
+    Authentication: X-Session-Id (with 'git' service)
     """
-    # Verify authentication (session or legacy key)
-    auth_type = verify_session_or_key("git")
-    if not auth_type:
+    if not verify_session("git"):
         logger.warning("Unauthorized fetch-bundle attempt")
         audit_log.git_fetch(
             session_id=request.headers.get("X-Session-Id"), repo_url="unknown", status_code=401, auth_type=None
@@ -536,7 +527,7 @@ def fetch_bundle():
 
             logger.info("Bundle created successfully, temp repo cleaned up")
             audit_log.git_fetch(
-                session_id=request.headers.get("X-Session-Id"), repo_url=repo_url, status_code=200, auth_type=auth_type
+                session_id=request.headers.get("X-Session-Id"), repo_url=repo_url, status_code=200, auth_type="session"
             )
 
             # Return bundle file (temp bundle file will be cleaned up by Flask after sending)
@@ -553,7 +544,7 @@ def fetch_bundle():
             session_id=request.headers.get("X-Session-Id"),
             repo_url=repo_url or "unknown",
             status_code=408,
-            auth_type=auth_type,
+            auth_type="session",
         )
         return jsonify({"error": "operation timeout"}), 408
 
@@ -563,7 +554,7 @@ def fetch_bundle():
             session_id=request.headers.get("X-Session-Id"),
             repo_url=repo_url or "unknown",
             status_code=500,
-            auth_type=auth_type,
+            auth_type="session",
         )
         return error_response(
             what="Bundle operation failed",
@@ -590,11 +581,9 @@ def push_bundle():
 
     Files are cloned to temporary directory and cleaned up immediately after pushing.
 
-    Authentication: X-Session-Id (with 'git' service) OR X-Auth-Key
+    Authentication: X-Session-Id (with 'git' service)
     """
-    # Verify authentication (session or legacy key)
-    auth_type = verify_session_or_key("git")
-    if not auth_type:
+    if not verify_session("git"):
         logger.warning("Unauthorized push-bundle attempt")
         audit_log.git_push(
             session_id=request.headers.get("X-Session-Id"),
@@ -849,7 +838,7 @@ def push_bundle():
                 branch=branch,
                 status_code=200,
                 pr_url=response.get("pr_url"),
-                auth_type=auth_type,
+                auth_type="session",
             )
             return jsonify(response)
 
@@ -860,7 +849,7 @@ def push_bundle():
             repo_url=repo_url or "unknown",
             branch=branch or "unknown",
             status_code=408,
-            auth_type=auth_type,
+            auth_type="session",
         )
         return jsonify({"error": "operation timeout"}), 408
 
@@ -871,7 +860,7 @@ def push_bundle():
             repo_url=repo_url or "unknown",
             branch=branch or "unknown",
             status_code=500,
-            auth_type=auth_type,
+            auth_type="session",
         )
         return error_response(
             what="Push operation failed",
@@ -889,7 +878,6 @@ def push_bundle():
 if __name__ == "__main__":
     logger.info("Starting Credential Proxy Server")
     logger.info("Mode: Session-based auth + transparent credential proxy")
-    logger.info(f"Legacy auth key configured: {bool(os.environ.get('PROXY_SECRET_KEY'))}")
     logger.info(f"Services available: {credential_store.list_services() + ['git']}")
 
     # Run server — debug is always off to prevent interactive debugger
