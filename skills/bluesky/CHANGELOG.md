@@ -2,6 +2,11 @@
 
 All notable changes to the Bluesky Access skill will be documented in this file.
 
+## [2.0.1] - 2026-02-12
+
+### Changed
+- Updated skill description to trigger on bsky.app URLs, preventing a wasted web_fetch round trip on Bluesky's JavaScript SPA
+
 ## [2.0.0] - 2026-02-12
 
 ### Added
