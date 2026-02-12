@@ -1,6 +1,6 @@
 ---
 name: bluesky
-description: Search and interact with Bluesky/ATProtocol. Public API for reads (no auth needed), credential proxy for writes.
+description: Search and interact with Bluesky/ATProtocol. Always use this skill when encountering bsky.app URLs — web_fetch cannot render Bluesky's JavaScript SPA. Use for resolving posts, threads, quote chains, profiles, and search. Public API for reads (no auth needed), credential proxy for writes.
 ---
 
 # Bluesky Skill
