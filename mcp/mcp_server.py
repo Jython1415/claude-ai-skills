@@ -267,9 +267,7 @@ async def report_skill_issue(
     """
     # Validate skill name
     if skill_name not in KNOWN_SKILLS:
-        return {
-            "error": f"Unknown skill: {skill_name}. Must be one of: {', '.join(sorted(KNOWN_SKILLS))}"
-        }
+        return {"error": f"Unknown skill: {skill_name}. Must be one of: {', '.join(sorted(KNOWN_SKILLS))}"}
 
     # Validate title length
     if len(title) > 200:
