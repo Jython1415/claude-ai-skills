@@ -16,20 +16,18 @@ Example:
     python get_profile.py bsky.app
 """
 
-import os
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import requests
-
-PUBLIC_API = "https://public.api.bsky.app/xrpc"
+from bsky_client import api
 
 
 def get_profile(actor: str) -> dict:
     """
     Get Bluesky user profile.
-
-    Uses the public API by default (no auth needed).
-    Falls back to credential proxy if SESSION_ID and PROXY_URL are set.
 
     Args:
         actor: Handle (e.g., "bsky.app") or DID
@@ -37,30 +35,12 @@ def get_profile(actor: str) -> dict:
     Returns:
         Profile data
     """
-    session_id = os.environ.get("SESSION_ID")
-    proxy_url = os.environ.get("PROXY_URL")
-
-    if session_id and proxy_url:
-        # Use proxy (authenticated)
-        response = requests.get(
-            f"{proxy_url}/proxy/bsky/app.bsky.actor.getProfile",
-            params={"actor": actor},
-            headers={"X-Session-Id": session_id},
-            timeout=30,
-        )
-    else:
-        # Use public API (no auth needed)
-        response = requests.get(
-            f"{PUBLIC_API}/app.bsky.actor.getProfile",
-            params={"actor": actor},
-            timeout=30,
-        )
-
-    if response.status_code == 400:
-        raise ValueError(f"User not found: {actor}")
-
-    response.raise_for_status()
-    return response.json()
+    try:
+        return api.get("app.bsky.actor.getProfile", {"actor": actor})
+    except requests.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code == 400:
+            raise ValueError(f"User not found: {actor}") from e
+        raise
 
 
 def format_profile(profile: dict) -> str:

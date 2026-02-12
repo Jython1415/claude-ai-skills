@@ -17,48 +17,18 @@ Examples:
     python get_post_thread.py at://did:plc:xxx/app.bsky.feed.post/3abc123 10 5
 """
 
-import re
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import requests
-
-PUBLIC_API = "https://public.api.bsky.app/xrpc"
-
-
-def resolve_handle_to_did(handle: str) -> str:
-    """Resolve a Bluesky handle to a DID via the public API."""
-    response = requests.get(
-        f"{PUBLIC_API}/com.atproto.identity.resolveHandle",
-        params={"handle": handle},
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.json()["did"]
-
-
-def url_to_at_uri(url: str) -> str:
-    """Convert a bsky.app post URL to an AT-URI.
-
-    Accepts URLs like:
-        https://bsky.app/profile/handle.bsky.social/post/3abc123
-        https://bsky.app/profile/did:plc:xxx/post/3abc123
-    """
-    match = re.match(r"https://bsky\.app/profile/([^/]+)/post/([^/?]+)", url)
-    if not match:
-        raise ValueError(f"Invalid bsky.app post URL: {url}")
-
-    actor, rkey = match.groups()
-    if not actor.startswith("did:"):
-        actor = resolve_handle_to_did(actor)
-
-    return f"at://{actor}/app.bsky.feed.post/{rkey}"
+from bsky_client import api, url_to_at_uri
 
 
 def get_post_thread(post_ref: str, depth: int = 6, parent_height: int = 80) -> dict:
     """
     Get a post thread with parent chain and replies.
-
-    Uses the public API (no auth needed).
 
     Args:
         post_ref: AT-URI or bsky.app URL of the post
@@ -75,17 +45,14 @@ def get_post_thread(post_ref: str, depth: int = 6, parent_height: int = 80) -> d
     else:
         raise ValueError(f"Invalid post reference: {post_ref}")
 
-    response = requests.get(
-        f"{PUBLIC_API}/app.bsky.feed.getPostThread",
-        params={
+    return api.get(
+        "app.bsky.feed.getPostThread",
+        {
             "uri": uri,
             "depth": min(max(depth, 0), 1000),
             "parentHeight": min(max(parent_height, 0), 1000),
         },
-        timeout=30,
     )
-    response.raise_for_status()
-    return response.json()
 
 
 def format_post(post_data: dict, indent: int = 0) -> str:

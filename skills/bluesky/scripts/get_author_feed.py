@@ -23,10 +23,12 @@ Examples:
 """
 
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import requests
-
-PUBLIC_API = "https://public.api.bsky.app/xrpc"
+from bsky_client import api
 
 VALID_FILTERS = [
     "posts_with_replies",
@@ -40,8 +42,6 @@ def get_author_feed(actor: str, limit: int = 20, filter_type: str = "posts_no_re
     """
     Get a user's recent posts.
 
-    Uses the public API (no auth needed).
-
     Args:
         actor: Handle (e.g., "bsky.app") or DID
         limit: Maximum number of posts (1-100)
@@ -54,21 +54,19 @@ def get_author_feed(actor: str, limit: int = 20, filter_type: str = "posts_no_re
     if filter_type not in VALID_FILTERS:
         raise ValueError(f"Invalid filter: {filter_type}. Must be one of: {', '.join(VALID_FILTERS)}")
 
-    response = requests.get(
-        f"{PUBLIC_API}/app.bsky.feed.getAuthorFeed",
-        params={
-            "actor": actor,
-            "limit": min(max(limit, 1), 100),
-            "filter": filter_type,
-        },
-        timeout=30,
-    )
-
-    if response.status_code == 400:
-        raise ValueError(f"User not found: {actor}")
-
-    response.raise_for_status()
-    return response.json()
+    try:
+        return api.get(
+            "app.bsky.feed.getAuthorFeed",
+            {
+                "actor": actor,
+                "limit": min(max(limit, 1), 100),
+                "filter": filter_type,
+            },
+        )
+    except requests.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code == 400:
+            raise ValueError(f"User not found: {actor}") from e
+        raise
 
 
 def format_post(item: dict) -> str:

@@ -20,17 +20,17 @@ Examples:
 """
 
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import requests
-
-PUBLIC_API = "https://public.api.bsky.app/xrpc"
+from bsky_client import api
 
 
 def get_trending_topics(limit: int = 10) -> dict:
     """
     Get a lightweight list of trending topics.
-
-    Uses app.bsky.unspecced.getTrendingTopics for a compact overview.
 
     Args:
         limit: Maximum number of topics (1-25, default 10)
@@ -38,20 +38,12 @@ def get_trending_topics(limit: int = 10) -> dict:
     Returns:
         Dict with 'topics' and 'suggested' lists
     """
-    response = requests.get(
-        f"{PUBLIC_API}/app.bsky.unspecced.getTrendingTopics",
-        params={"limit": min(max(limit, 1), 25)},
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.json()
+    return api.get("app.bsky.unspecced.getTrendingTopics", {"limit": min(max(limit, 1), 25)})
 
 
 def get_trends(limit: int = 10) -> dict:
     """
     Get rich trending data with post counts and top actors.
-
-    Uses app.bsky.unspecced.getTrends for detailed trend information.
 
     Args:
         limit: Maximum number of trends (1-25, default 10)
@@ -59,13 +51,7 @@ def get_trends(limit: int = 10) -> dict:
     Returns:
         Dict with 'trends' list containing detailed trend objects
     """
-    response = requests.get(
-        f"{PUBLIC_API}/app.bsky.unspecced.getTrends",
-        params={"limit": min(max(limit, 1), 25)},
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.json()
+    return api.get("app.bsky.unspecced.getTrends", {"limit": min(max(limit, 1), 25)})
 
 
 def format_topic(topic: dict) -> str:

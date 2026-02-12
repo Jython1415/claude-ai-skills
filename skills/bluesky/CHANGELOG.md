@@ -2,6 +2,21 @@
 
 All notable changes to the Bluesky Access skill will be documented in this file.
 
+## [1.3.0] - 2026-02-12
+
+### Added
+- `bsky_client.py` - Shared client module with automatic auth routing (public API vs credential proxy) based on endpoint classification
+- `resolve_did_to_handle()` utility in `bsky_client` for DID-to-handle resolution
+- Unit tests for `bsky_client` covering endpoint classification, routing logic, and utility functions
+- Auth Routing section in SKILL.md documenting how the client auto-routes requests
+
+### Changed
+- Migrated all 8 scripts to use the shared `bsky_client` module instead of inline `requests` calls
+- Consolidated duplicated `resolve_handle_to_did()` and `url_to_at_uri()` helpers (previously copied across 3 scripts) into `bsky_client`
+- Removed auth branching boilerplate from `get_profile.py` and `search_posts.py` (now handled by the client)
+- Updated Authenticated Operations section in SKILL.md to use `bsky_client` API
+- Environment variables `SESSION_ID` and `PROXY_URL` are service-agnostic (one session can grant access to multiple services like bsky + gmail)
+
 ## [1.2.0] - 2026-02-11
 
 ### Added

@@ -121,57 +121,6 @@ the Flask API. The setup script validates this key is set before starting servic
 Known services (`bsky`, `github_api`, `gmail`, `gcal`, `gdrive`) have hardcoded base URLs and auth types
 in `credentials.py`. Custom services need explicit `base_url` and `type` fields.
 
-## Running Locally
-
-```bash
-# Sync dependencies
-uv sync
-
-# Start Flask server
-uv run python server/proxy_server.py
-
-# Start MCP server (separate terminal)
-FLASK_URL=http://localhost:8443 uv run python mcp/mcp_server.py
-```
-
-## LaunchAgent Setup
-
-All three services (Flask proxy, MCP server, Cloudflare Tunnel) auto-start on login via LaunchAgents:
-
-```bash
-# Install (one-time) or restart servers
-./scripts/setup-launchagents.sh
-
-# Check status
-launchctl list | grep joshuashew
-
-# Logs
-tail -f ~/Library/Logs/com.joshuashew.credential-proxy.log
-tail -f ~/Library/Logs/com.joshuashew.mcp-server.log
-tail -f ~/Library/Logs/com.joshuashew.cloudflare-tunnel.log
-
-# Audit log (JSON Lines — session lifecycle, proxy requests, git operations)
-tail -f ~/Library/Logs/credential-proxy-audit.jsonl
-```
-
-**Important for Claude Code:**
-- The setup script (`setup-launchagents.sh`) must be run by the USER, not by Claude
-- Claude cannot execute this script due to launchctl permissions
-- If servers need restarting, ask the user to run: `./scripts/setup-launchagents.sh`
-- The script is idempotent - safe to run multiple times (detects and restarts existing servers)
-- The script validates `PROXY_SECRET_KEY` is set before starting services
-
-## Cloudflare Tunnel
-
-The MCP server is exposed via Cloudflare Tunnel (dashboard-managed).
-The tunnel connector runs as a system LaunchDaemon (`com.cloudflare.cloudflared`),
-installed via `sudo cloudflared service install <token>`.
-Wildcard DNS `*.joshuashew.com` routes through the tunnel.
-
-**Important:** Cloudflare's "Block AI Bots" setting (Security -> Bots) must be
-disabled for the zone. It silently blocks Claude.ai's backend requests
-(`python-httpx` User-Agent) through the tunnel.
-
 ## Dependencies
 
 Managed via `pyproject.toml` and uv:
@@ -190,75 +139,13 @@ Managed via `pyproject.toml` and uv:
 - **Transport Security**: Cloudflare Tunnel provides encrypted HTTPS tunnel
 - **Audit Logging**: All session lifecycle events, proxy requests, and git operations logged to `~/Library/Logs/credential-proxy-audit.jsonl`
 
-## Claude Code Web Environment
+## Environment Setup
 
-Claude Code can run in two environments: **locally** on the user's machine (Claude Code CLI), or
-**remotely** in a cloud container (Claude Code Web, accessed via claude.ai or the mobile app).
-The environment determines what tools are available and how the agent should interact with GitHub.
-
-### Detecting the environment
-
-```python
-import os
-
-is_claude_code = os.environ.get("CLAUDECODE") == "1"           # Any Claude Code (local or web)
-is_web = os.environ.get("CLAUDE_CODE_REMOTE") == "true"         # Claude Code Web specifically
-is_local = is_claude_code and not is_web                        # Claude Code CLI on user's machine
-```
-
-In bash:
-```bash
-if [ "$CLAUDE_CODE_REMOTE" = "true" ]; then
-    echo "Running in Claude Code Web"
-fi
-```
-
-### What's available in Claude Code Web
-
-| Capability | Local (CLI) | Web |
-|---|---|---|
-| Credential proxy / MCP tools | Yes | No |
-| `GITHUB_TOKEN` (fine-grained PAT) | Maybe | Yes (auto-provided) |
-| `gh` CLI | If installed | Install via `apt-get install -y gh` (auto-authenticates via `GITHUB_TOKEN`) |
-| Git push | Via SSH or HTTPS | Via local git proxy (auto-configured as `origin`) |
-| GitHub API | Via credential proxy or direct | Direct via `GITHUB_TOKEN` |
-| Run proxy server / MCP server | Yes | No (no credentials.json, no .env) |
-| `uv` / Python | Yes | Yes |
-
-### GitHub workflow in Claude Code Web
-
-The `GITHUB_TOKEN` environment variable is automatically set and grants access to the
-repository for common operations (code, issues, PRs). Use it for all GitHub API interactions:
-
-**GitHub CLI (preferred for PRs, issues, comments):**
-```bash
-# Install gh if not already available (idempotent, uses apt cache)
-which gh >/dev/null 2>&1 || apt-get install -y gh
-
-# gh auto-authenticates via GITHUB_TOKEN — no `gh auth login` needed
-gh issue list
-gh pr create --title "..." --body "..."
-gh issue comment 87 --body "..."
-```
-
-**Direct API (when gh CLI cannot express the request):**
-```bash
-# Prefer `gh api` over raw curl where possible
-gh api repos/{owner}/{repo}/issues
-```
-
-**Git operations** work normally — the container's git proxy is pre-configured as the `origin`
-remote and handles authentication transparently.
-
-### What to skip in Claude Code Web
-
-- Do not attempt to start the Flask proxy server or MCP server (no credentials available)
-- Do not attempt to call MCP tools like `create_session` or `report_skill_issue`
-- Do not rely on the credential proxy for Bluesky/Gmail/etc. API calls
-- Skills that require the credential proxy (gmail, bluesky authenticated endpoints) cannot be
-  tested end-to-end; write the code and verify via PR review
-- The web container has network egress restrictions (host allowlist). Calls to arbitrary
-  external APIs may fail. GitHub and common package registries are allowed.
+Claude Code runs in two environments: **locally** (CLI) or **remotely** (Claude Code Web).
+The SessionStart hook (`.claude/hooks/session-start.sh`) outputs the appropriate setup file
+at session start:
+- `LOCAL-SETUP.md` — local behavioral instructions, server management, LaunchAgent/Cloudflare reference
+- `REMOTE-SETUP.md` — remote behavioral instructions, available/unavailable tools, network constraints
 
 ## Core Requirements
 

@@ -17,17 +17,17 @@ Examples:
 """
 
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import requests
-
-PUBLIC_API = "https://public.api.bsky.app/xrpc"
+from bsky_client import api
 
 
 def search_users(query: str, limit: int = 25) -> dict:
     """
     Search for Bluesky users.
-
-    Uses the public API (no auth needed).
 
     Args:
         query: Search query (matches against handle, display name, and bio)
@@ -36,13 +36,7 @@ def search_users(query: str, limit: int = 25) -> dict:
     Returns:
         API response with actors array
     """
-    response = requests.get(
-        f"{PUBLIC_API}/app.bsky.actor.searchActors",
-        params={"q": query, "limit": min(max(limit, 1), 100)},
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.json()
+    return api.get("app.bsky.actor.searchActors", {"q": query, "limit": min(max(limit, 1), 100)})
 
 
 def format_user(actor: dict) -> str:
