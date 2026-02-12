@@ -302,6 +302,10 @@ For `app.bsky.feed.getAuthorFeed` (pass as `filter` param):
 
 ## Available Endpoints
 
+The lists below cover common endpoints. For the full API reference with parameters, response schemas, and examples, see the [Bluesky HTTP API Reference](https://docs.bsky.app/docs/category/http-reference). Individual endpoint docs follow the URL pattern `https://docs.bsky.app/docs/api/{nsid-in-kebab-case}` (e.g., `app.bsky.feed.getTimeline` → `https://docs.bsky.app/docs/api/app-bsky-feed-get-timeline`).
+
+Any XRPC endpoint can be called via `api.get()` or `api.post()` — the libraries are not limited to the endpoints listed here.
+
 ### Public Read Endpoints (No Auth)
 
 All these work without authentication via `https://public.api.bsky.app/xrpc/`:
