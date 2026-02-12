@@ -50,7 +50,78 @@ When creating a session, include the specific service name:
 Use create_session with services: ["gmail_work"]
 ```
 
-## Usage Examples
+## Common Tasks
+
+**Always check scripts/ first** before writing inline API code. The scripts handle authentication, error handling, and response formatting.
+
+| Task | Script | Example |
+|------|--------|---------|
+| List or search messages | `list_messages.py` | `python list_messages.py "from:alice is:unread" 10` |
+| Read a single message | `read_message.py` | `python read_message.py <message_id>` |
+| Read an email thread | `read_thread.py` | `python read_thread.py <thread_id>` |
+| Find and read a thread | `read_thread.py` | `python read_thread.py --search "subject:meeting"` |
+| Custom query / write ops | Direct API call | See [Direct API Usage](#direct-api-usage) below |
+
+## Scripts
+
+### list_messages.py - Search and list messages
+
+```bash
+python list_messages.py [query] [max_results]
+```
+
+Returns message metadata (From, To, Subject, Date) and preview snippet for each match.
+
+**Examples:**
+
+```bash
+# List 10 most recent messages
+python list_messages.py
+
+# Search with Gmail query operators
+python list_messages.py "from:example@gmail.com is:unread" 25
+
+# All starred messages
+python list_messages.py "is:starred"
+```
+
+### read_message.py - Read a single message body
+
+```bash
+python read_message.py <message_id>
+```
+
+Fetches the full message and decodes the MIME body (prefers text/plain, falls back to text/html). Outputs headers (From, To, Cc, Subject, Date) followed by the message body.
+
+**Example:**
+
+```bash
+# Get message ID from list_messages.py, then read it
+python read_message.py 18d1a2b3c4d5e6f7
+```
+
+### read_thread.py - Read an entire email thread
+
+```bash
+python read_thread.py <thread_id>
+python read_thread.py --search "query"
+```
+
+Fetches all messages in a thread and displays them in chronological order with decoded bodies. Accepts a thread ID directly, or use `--search` to find a thread by Gmail query.
+
+**Examples:**
+
+```bash
+# Read thread by ID
+python read_thread.py 18d1a2b3c4d5e6f7
+
+# Search for a thread and read it
+python read_thread.py --search "subject:weekly sync from:manager"
+```
+
+## Direct API Usage
+
+For operations not covered by scripts (drafts, labels, custom queries), use the Gmail API directly via the credential proxy.
 
 ### List Recent Messages
 
@@ -200,13 +271,6 @@ The proxy enforces endpoint-level filtering for defense-in-depth, independent of
 - Label CRUD (create, read, update, delete)
 - Modify labels on messages/threads (`modify`, `batchModify`)
 - Trash/untrash messages and threads
-
-## Scripts
-
-See the `scripts/` directory for ready-to-use Python scripts:
-
-- `list_messages.py` - Search and list Gmail messages
-- `read_message.py` - Read full message body by message ID
 
 ## Reporting Issues
 

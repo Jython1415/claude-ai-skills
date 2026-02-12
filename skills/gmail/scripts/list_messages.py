@@ -88,6 +88,7 @@ def list_messages(query: str = "", max_results: int = 10) -> list:
 def format_message(message: dict) -> str:
     """Format a message for display."""
     msg_id = message.get("id", "unknown")
+    thread_id = message.get("threadId", "unknown")
     snippet = message.get("snippet", "")
 
     # Extract headers
@@ -109,6 +110,7 @@ def format_message(message: dict) -> str:
 
     return (
         f"ID: {msg_id}\n"
+        f"Thread ID: {thread_id}\n"
         f"From: {from_addr}\n"
         f"To: {to_addr}\n"
         f"Subject: {subject}\n"
