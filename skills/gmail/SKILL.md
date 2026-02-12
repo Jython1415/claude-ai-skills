@@ -72,7 +72,7 @@ for msg in response.json().get("messages", []):
     # Fetch full message details
     msg_response = requests.get(
         f"{PROXY_URL}/proxy/gmail/gmail/v1/users/me/messages/{msg_id}",
-        params={"format": "metadata", "metadataHeaders": "From,To,Subject,Date"},
+        params={"format": "metadata", "metadataHeaders": ["From", "To", "Subject", "Date"]},
         headers={"X-Session-Id": SESSION_ID}
     )
     print(msg_response.json())
@@ -206,6 +206,7 @@ The proxy enforces endpoint-level filtering for defense-in-depth, independent of
 See the `scripts/` directory for ready-to-use Python scripts:
 
 - `list_messages.py` - Search and list Gmail messages
+- `read_message.py` - Read full message body by message ID
 
 ## Reporting Issues
 

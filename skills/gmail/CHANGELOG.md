@@ -2,6 +2,17 @@
 
 All notable changes to the Gmail Access skill will be documented in this file.
 
+## [0.2.0] - 2026-02-11
+
+### Added
+- `read_message.py` - Read full message body with MIME multipart decoding
+
+### Fixed
+- Fix `metadataHeaders` parameter in `list_messages.py` — pass as list instead of comma-separated string
+
+### Removed
+- Remove `send_message.py` — sending is blocked by the proxy; use drafts instead
+
 ## [0.1.1] - 2026-02-10
 
 ### Fixed

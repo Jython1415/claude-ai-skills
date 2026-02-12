@@ -74,7 +74,7 @@ def list_messages(query: str = "", max_results: int = 10) -> list:
         msg_id = msg["id"]
         msg_response = requests.get(
             f"{proxy_url}/proxy/{service}/gmail/v1/users/me/messages/{msg_id}",
-            params={"format": "metadata", "metadataHeaders": "From,To,Subject,Date"},
+            params={"format": "metadata", "metadataHeaders": ["From", "To", "Subject", "Date"]},
             headers={"X-Session-Id": session_id},
             timeout=30,
         )
