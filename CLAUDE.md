@@ -218,17 +218,17 @@ fi
 | Capability | Local (CLI) | Web |
 |---|---|---|
 | Credential proxy / MCP tools | Yes | No |
-| `GITHUB_TOKEN` (repo-scoped PAT) | Maybe | Yes (auto-provided) |
+| `GITHUB_TOKEN` (fine-grained PAT) | Maybe | Yes (auto-provided) |
 | `gh` CLI | If installed | Install via `apt-get install -y gh` (auto-authenticates via `GITHUB_TOKEN`) |
-| Git push | Via SSH or HTTPS | Via built-in git proxy at `127.0.0.1` (auto-configured as `origin`) |
+| Git push | Via SSH or HTTPS | Via local git proxy (auto-configured as `origin`) |
 | GitHub API | Via credential proxy or direct | Direct via `GITHUB_TOKEN` |
 | Run proxy server / MCP server | Yes | No (no credentials.json, no .env) |
 | `uv` / Python | Yes | Yes |
 
 ### GitHub workflow in Claude Code Web
 
-The `GITHUB_TOKEN` environment variable is automatically set and grants full access to the
-repository. Use it for all GitHub API interactions:
+The `GITHUB_TOKEN` environment variable is automatically set and grants access to the
+repository for common operations (code, issues, PRs). Use it for all GitHub API interactions:
 
 **GitHub CLI (preferred for PRs, issues, comments):**
 ```bash
@@ -241,10 +241,10 @@ gh pr create --title "..." --body "..."
 gh issue comment 87 --body "..."
 ```
 
-**Direct API (when gh is insufficient):**
+**Direct API (when gh CLI cannot express the request):**
 ```bash
-curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
-  "https://api.github.com/repos/Jython1415/claude-ai-skills/issues"
+# Prefer `gh api` over raw curl where possible
+gh api repos/{owner}/{repo}/issues
 ```
 
 **Git operations** work normally — the container's git proxy is pre-configured as the `origin`
@@ -257,6 +257,8 @@ remote and handles authentication transparently.
 - Do not rely on the credential proxy for Bluesky/Gmail/etc. API calls
 - Skills that require the credential proxy (gmail, bluesky authenticated endpoints) cannot be
   tested end-to-end; write the code and verify via PR review
+- The web container has network egress restrictions (host allowlist). Calls to arbitrary
+  external APIs may fail. GitHub and common package registries are allowed.
 
 ## Core Requirements
 
