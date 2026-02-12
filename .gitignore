@@ -33,10 +33,11 @@ ENV/
 *.swo
 *~
 
-# Claude Code (ignore everything except shared config and hooks)
+# Claude Code (ignore everything except shared config, hooks, and skills)
 .claude/*
 !.claude/settings.json
 !.claude/hooks/
+!.claude/skills/
 
 # OS
 .DS_Store
