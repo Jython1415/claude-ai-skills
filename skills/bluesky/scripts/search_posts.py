@@ -16,20 +16,18 @@ Example:
     python search_posts.py "python" 10
 """
 
-import os
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import requests
-
-PUBLIC_API = "https://public.api.bsky.app/xrpc"
+from bsky_client import api
 
 
 def search_posts(query: str, limit: int = 25) -> dict:
     """
     Search Bluesky posts.
-
-    Uses the public API by default (no auth needed).
-    Falls back to credential proxy if SESSION_ID and PROXY_URL are set.
 
     Args:
         query: Search query string
@@ -38,27 +36,7 @@ def search_posts(query: str, limit: int = 25) -> dict:
     Returns:
         API response with posts array
     """
-    session_id = os.environ.get("SESSION_ID")
-    proxy_url = os.environ.get("PROXY_URL")
-
-    if session_id and proxy_url:
-        # Use proxy (authenticated)
-        response = requests.get(
-            f"{proxy_url}/proxy/bsky/app.bsky.feed.searchPosts",
-            params={"q": query, "limit": min(limit, 100)},
-            headers={"X-Session-Id": session_id},
-            timeout=30,
-        )
-    else:
-        # Use public API (no auth needed)
-        response = requests.get(
-            f"{PUBLIC_API}/app.bsky.feed.searchPosts",
-            params={"q": query, "limit": min(limit, 100)},
-            timeout=30,
-        )
-
-    response.raise_for_status()
-    return response.json()
+    return api.get("app.bsky.feed.searchPosts", {"q": query, "limit": min(limit, 100)})
 
 
 def format_post(post: dict) -> str:

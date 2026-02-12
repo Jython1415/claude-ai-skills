@@ -7,6 +7,22 @@ description: Search and interact with Bluesky/ATProtocol. Public API for reads (
 
 Access Bluesky (ATProtocol) APIs. Read operations use the public API directly (no authentication needed). Write operations use the credential proxy.
 
+## Auth Routing
+
+All scripts use the shared `bsky_client` module which automatically routes requests:
+
+- **Public endpoints** (profiles, search, feeds, trending) always use the public API directly -- no auth needed.
+- **Auth-required endpoints** (timeline, notifications, writes) route through the credential proxy when `SESSION_ID` and `PROXY_URL` are set.
+- **Unknown endpoints** default to auth-required (fail-safe).
+
+To enable authenticated operations, set these environment variables (returned by `create_session`):
+```bash
+export SESSION_ID=<session_id>
+export PROXY_URL=<proxy_url>
+```
+
+Sessions are service-agnostic -- one session can grant access to multiple services (e.g., `["bsky", "gmail"]`).
+
 ## Quick Start
 
 Use the scripts in `scripts/` -- they handle URL parsing, pagination, and formatting.
@@ -174,36 +190,31 @@ Write operations (posting, liking, following, etc.) require authentication via t
 1. **MCP Custom Connector**: Add the credential proxy MCP server as a custom connector in Claude.ai
 2. **Bluesky Credentials**: Configured on the proxy server in `credentials.json`
 
-Create a session:
-```
-Use create_session with services: ["bsky"]
+Create a session and set the environment variables:
+```bash
+# Use create_session MCP tool with services: ["bsky"]
+# Then set the returned values:
+export SESSION_ID=<session_id>
+export PROXY_URL=<proxy_url>
 ```
 
-This returns `session_id` and `proxy_url` -- set these as environment variables.
+Scripts automatically detect these variables and route authenticated requests through the proxy.
 
 ### Create a Post
 
 ```python
-import os
-import requests
+from bsky_client import api
 
-SESSION_ID = os.environ["SESSION_ID"]
-PROXY_URL = os.environ["PROXY_URL"]
-
-response = requests.post(
-    f"{PROXY_URL}/proxy/bsky/com.atproto.repo.createRecord",
-    json={
-        "repo": "your-did-here",
-        "collection": "app.bsky.feed.post",
-        "record": {
-            "$type": "app.bsky.feed.post",
-            "text": "Hello from Claude!",
-            "createdAt": "2024-01-01T00:00:00.000Z"
-        }
-    },
-    headers={"X-Session-Id": SESSION_ID},
-    timeout=30,
-)
+# With SESSION_ID and PROXY_URL set, writes route through the proxy automatically
+result = api.post("com.atproto.repo.createRecord", {
+    "repo": "your-did-here",
+    "collection": "app.bsky.feed.post",
+    "record": {
+        "$type": "app.bsky.feed.post",
+        "text": "Hello from Claude!",
+        "createdAt": "2024-01-01T00:00:00.000Z"
+    }
+})
 ```
 
 ## Available Read Endpoints (Public API)

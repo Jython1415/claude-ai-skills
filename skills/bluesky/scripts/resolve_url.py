@@ -22,35 +22,12 @@ Examples:
 
 import re
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import requests
-
-PUBLIC_API = "https://public.api.bsky.app/xrpc"
-
-
-def resolve_handle_to_did(handle: str) -> str:
-    """Resolve a Bluesky handle to a DID via the public API."""
-    response = requests.get(
-        f"{PUBLIC_API}/com.atproto.identity.resolveHandle",
-        params={"handle": handle},
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.json()["did"]
-
-
-def resolve_did_to_handle(did: str) -> str | None:
-    """Resolve a DID to a handle via getProfile. Returns None on failure."""
-    try:
-        response = requests.get(
-            f"{PUBLIC_API}/app.bsky.actor.getProfile",
-            params={"actor": did},
-            timeout=30,
-        )
-        response.raise_for_status()
-        return response.json().get("handle")
-    except requests.exceptions.RequestException:
-        return None
+from bsky_client import resolve_did_to_handle, resolve_handle_to_did
 
 
 def resolve_url(identifier: str) -> dict:

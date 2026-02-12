@@ -18,52 +18,18 @@ Examples:
     python trace_quote_chain.py at://did:plc:xxx/app.bsky.feed.post/3abc123 20
 """
 
-import re
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import requests
-
-PUBLIC_API = "https://public.api.bsky.app/xrpc"
-
-
-def resolve_handle_to_did(handle: str) -> str:
-    """Resolve a Bluesky handle to a DID via the public API."""
-    response = requests.get(
-        f"{PUBLIC_API}/com.atproto.identity.resolveHandle",
-        params={"handle": handle},
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.json()["did"]
-
-
-def url_to_at_uri(url: str) -> str:
-    """Convert a bsky.app post URL to an AT-URI.
-
-    Accepts URLs like:
-        https://bsky.app/profile/handle.bsky.social/post/3abc123
-        https://bsky.app/profile/did:plc:xxx/post/3abc123
-    """
-    match = re.match(r"https://bsky\.app/profile/([^/]+)/post/([^/?#]+)", url)
-    if not match:
-        raise ValueError(f"Invalid bsky.app post URL: {url}")
-
-    actor, rkey = match.groups()
-    if not actor.startswith("did:"):
-        actor = resolve_handle_to_did(actor)
-
-    return f"at://{actor}/app.bsky.feed.post/{rkey}"
+from bsky_client import api, url_to_at_uri
 
 
 def fetch_post(uri: str) -> dict | None:
     """Fetch a single post by AT-URI. Returns None if not found."""
-    response = requests.get(
-        f"{PUBLIC_API}/app.bsky.feed.getPosts",
-        params={"uris": [uri]},
-        timeout=30,
-    )
-    response.raise_for_status()
-    posts = response.json().get("posts", [])
+    posts = api.get("app.bsky.feed.getPosts", {"uris": [uri]}).get("posts", [])
     return posts[0] if posts else None
 
 
