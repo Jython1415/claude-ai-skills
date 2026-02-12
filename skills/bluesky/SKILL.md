@@ -21,13 +21,27 @@ import sys
 sys.path.insert(0, "/path/to/skills/bluesky")
 ```
 
-For authenticated operations (writes, timeline, known_followers), set these environment variables (returned by `create_session`):
-```bash
-export SESSION_ID=<session_id>
-export PROXY_URL=<proxy_url>
+Public read operations (profiles, search, feeds, trending) work immediately with no further setup.
+
+### Authenticated operations
+
+For writes (posting, liking, following), timeline, notifications, known_followers, and other auth-required endpoints, create a session first using the `create_session` MCP tool:
+
+```
+create_session(services=["bsky"], ttl_minutes=30)
 ```
 
-Sessions are service-agnostic -- one session can grant access to multiple services (e.g., `["bsky", "gmail"]`).
+Then set the returned values as environment variables so the client can route through the credential proxy:
+
+```python
+import os
+os.environ["SESSION_ID"] = "<session_id from create_session>"
+os.environ["PROXY_URL"] = "<proxy_url from create_session>"
+```
+
+Once set, `api.get()` and `api.post()` automatically route auth-required endpoints through the proxy. No additional configuration is needed -- the client handles the routing.
+
+Sessions are service-agnostic -- one session can grant access to multiple services (e.g., `["bsky", "gmail"]`). Sessions expire after the specified TTL (default 30 minutes).
 
 ## Examples
 
@@ -177,7 +191,7 @@ print(f"{len(engaged)}/{len(followers)} followers liked the post ({len(engaged)/
 from bsky_client import api
 from datetime import datetime, timezone
 
-# Requires SESSION_ID and PROXY_URL to be set
+# Requires SESSION_ID and PROXY_URL (see "Authenticated operations" above)
 result = api.post("com.atproto.repo.createRecord", {
     "repo": "your-did-here",
     "collection": "app.bsky.feed.post",
