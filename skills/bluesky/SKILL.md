@@ -302,7 +302,15 @@ For `app.bsky.feed.getAuthorFeed` (pass as `filter` param):
 
 ## Available Endpoints
 
-The lists below cover common endpoints. For the full API reference with parameters, response schemas, and examples, see the [Bluesky HTTP API Reference](https://docs.bsky.app/docs/category/http-reference). Individual endpoint docs follow the URL pattern `https://docs.bsky.app/docs/api/{nsid-in-kebab-case}` (e.g., `app.bsky.feed.getTimeline` → `https://docs.bsky.app/docs/api/app-bsky-feed-get-timeline`).
+The lists below cover common endpoints. For the full API reference with parameters, response schemas, and examples, see the [Bluesky HTTP API Reference](https://docs.bsky.app/docs/category/http-reference).
+
+Individual endpoint docs are at `https://docs.bsky.app/docs/api/{slug}` where the slug is formed by replacing dots with hyphens and converting camelCase to kebab-case. Examples:
+
+| Endpoint NSID | Documentation URL |
+|---|---|
+| `app.bsky.feed.getTimeline` | [app-bsky-feed-get-timeline](https://docs.bsky.app/docs/api/app-bsky-feed-get-timeline) |
+| `com.atproto.repo.createRecord` | [com-atproto-repo-create-record](https://docs.bsky.app/docs/api/com-atproto-repo-create-record) |
+| `app.bsky.graph.muteActor` | [app-bsky-graph-mute-actor](https://docs.bsky.app/docs/api/app-bsky-graph-mute-actor) |
 
 Any XRPC endpoint can be called via `api.get()` or `api.post()` — the libraries are not limited to the endpoints listed here.
 
@@ -327,6 +335,42 @@ Feed: getTimeline, getActorLikes | Notifications: listNotifications, getUnreadCo
 ### Write Endpoints (Require Proxy)
 
 Records: createRecord, deleteRecord, putRecord, applyWrites, uploadBlob | Account: putPreferences, createBookmark, deleteBookmark | Notifications: updateSeen, registerPush, putPreferences | Graph mutations: muteActor, unmuteActor, muteActorList, unmuteActorList, muteThread, unmuteThread | Moderation: createReport
+
+### Write Operations Quick Reference
+
+Most write operations go through [`com.atproto.repo.createRecord`](https://docs.bsky.app/docs/api/com-atproto-repo-create-record) or [`com.atproto.repo.deleteRecord`](https://docs.bsky.app/docs/api/com-atproto-repo-delete-record). The table below shows the record schemas for common actions.
+
+**createRecord** — `api.post("com.atproto.repo.createRecord", body)`
+
+| Action | `collection` | `record` fields | Notes |
+|--------|-------------|-----------------|-------|
+| **Post** | `app.bsky.feed.post` | `text`, `createdAt`, optional `embed`, `facets`, `reply` | See [creating a post](https://docs.bsky.app/docs/tutorials/creating-a-post) for embeds and rich text |
+| **Like** | `app.bsky.feed.like` | `subject: {uri, cid}`, `createdAt` | `subject` is a strong ref — get `uri` and `cid` from the post object |
+| **Repost** | `app.bsky.feed.repost` | `subject: {uri, cid}`, `createdAt` | Same strong ref as like |
+| **Follow** | `app.bsky.graph.follow` | `subject: "<did>"`, `createdAt` | `subject` is a DID string, not a strong ref |
+| **Block** | `app.bsky.graph.block` | `subject: "<did>"`, `createdAt` | Same shape as follow |
+| **List item** | `app.bsky.graph.listitem` | `subject: "<did>"`, `list: "<at-uri>"`, `createdAt` | Adds an actor to a list |
+
+All `createRecord` calls require `repo` (your DID) and `collection` at the top level. Response: `{uri, cid}`.
+
+**deleteRecord** — `api.post("com.atproto.repo.deleteRecord", body)` ([docs](https://docs.bsky.app/docs/api/com-atproto-repo-delete-record))
+
+Body: `{repo, collection, rkey}` — extract `rkey` from the record's AT-URI (the last path segment).
+
+**uploadBlob** — `api.post("com.atproto.repo.uploadBlob", image_bytes)` ([docs](https://docs.bsky.app/docs/api/com-atproto-repo-upload-blob))
+
+Send raw bytes with `Content-Type` set to the MIME type (e.g., `image/png`). Returns a `blob` object to embed in a post record. Max image size: 1 MB.
+
+**Graph mutations** (simple POST, no createRecord needed):
+
+| Endpoint | Body | Docs |
+|----------|------|------|
+| `app.bsky.graph.muteActor` | `{actor}` | [docs](https://docs.bsky.app/docs/api/app-bsky-graph-mute-actor) |
+| `app.bsky.graph.unmuteActor` | `{actor}` | [docs](https://docs.bsky.app/docs/api/app-bsky-graph-unmute-actor) |
+| `app.bsky.graph.muteThread` | `{root}` | [docs](https://docs.bsky.app/docs/api/app-bsky-graph-mute-thread) |
+| `app.bsky.graph.unmuteThread` | `{root}` | [docs](https://docs.bsky.app/docs/api/app-bsky-graph-unmute-thread) |
+
+`actor` accepts a DID or handle. `root` is an AT-URI of the thread root post.
 
 ## Rate Limits
 
