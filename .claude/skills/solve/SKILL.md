@@ -4,7 +4,6 @@ description: >
   Turn GitHub issues into reviewed pull requests. Explores the codebase,
   collaboratively scopes design decisions with the user, plans the
   implementation, builds it, and runs code review before presenting the PR.
-disable-model-invocation: true
 argument-hint: <issue> [<issue> ...]
 allowed-tools: Bash(gh issue view:*), Bash(gh issue list:*), Bash(gh search:*), Bash(gh pr create:*), Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr list:*), Bash(gh pr comment:*), Bash(gh api:*), Bash(git *)
 ---
