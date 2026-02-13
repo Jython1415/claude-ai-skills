@@ -333,10 +333,7 @@ async def report_skill_issue(
     metadata_table = "\n".join(metadata_rows)
 
     # Build issue body
-    agent_note = (
-        "> *This issue was reported by a Claude.ai agent using the "
-        "`report_skill_issue` tool.*"
-    )
+    agent_note = "> *This issue was reported by a Claude.ai agent using the `report_skill_issue` tool.*"
     body_parts = [agent_note, "", metadata_table, "", "## Description", "", description]
 
     if interaction_log:
