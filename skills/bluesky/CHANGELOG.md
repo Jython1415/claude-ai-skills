@@ -2,6 +2,11 @@
 
 All notable changes to the Bluesky Access skill will be documented in this file.
 
+## [2.0.3] - 2026-02-13
+
+### Added
+- Documented `author` query parameter for `searchPosts` as an alternative to `from:` syntax — accepts handles or DIDs, useful for programmatic query construction (#103)
+
 ## [2.0.2] - 2026-02-13
 
 ### Fixed

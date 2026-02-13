@@ -69,6 +69,15 @@ for post in data["posts"]:
     print(f"  Likes: {post.get('likeCount', 0)} | Reposts: {post.get('repostCount', 0)}")
 ```
 
+Filter by author using the `author` query parameter (accepts handle or DID):
+
+```python
+# These three queries return identical results:
+data = api.get("app.bsky.feed.searchPosts", {"q": "from:handle.bsky.social claude", "limit": 5})
+data = api.get("app.bsky.feed.searchPosts", {"q": "claude", "limit": 5, "author": "handle.bsky.social"})
+data = api.get("app.bsky.feed.searchPosts", {"q": "claude", "limit": 5, "author": "did:plc:..."})
+```
+
 ### Get a post thread
 
 ```python
@@ -285,6 +294,7 @@ For `app.bsky.feed.searchPosts`:
 - Basic terms: `python programming`
 - Exact phrases: `"event sourcing"`
 - User filter: `from:handle.bsky.social`
+- Author param: `author` query parameter (handle or DID) — equivalent to `from:`, useful for programmatic queries
 - Mentions: `mentions:handle.bsky.social`
 - Date range: `since:2025-01-01 until:2025-06-01`
 - Language: `lang:en`
