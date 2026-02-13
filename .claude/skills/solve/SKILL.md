@@ -5,7 +5,7 @@ description: >
   collaboratively scopes design decisions with the user, plans the
   implementation, builds it, and runs code review before presenting the PR.
 argument-hint: <issue> [<issue> ...]
-allowed-tools: Bash(gh issue view:*), Bash(gh issue list:*), Bash(gh search:*), Bash(gh pr create:*), Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr list:*), Bash(gh pr comment:*), Bash(gh api:*), Bash(git *), Bash(uv *)
+allowed-tools: Bash(gh issue view:*), Bash(gh issue list:*), Bash(gh search:*), Bash(gh pr create:*), Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh pr list:*), Bash(gh pr comment:*), Bash(gh api:*), Bash(gh run *), Bash(git *), Bash(uv *)
 ---
 
 # Solve
@@ -142,7 +142,26 @@ Before presenting the PR to the user:
 2. If the review surfaces real issues, fix them and commit
 3. If fixes were non-trivial, re-run `/code-review`
 
-## Phase 8: Present
+## Phase 8: Confirm CI
+
+Before presenting the PR, confirm that GitHub CI actually passes on the
+PR itself. Local checks (Phase 6) are a fast feedback loop, but the
+GitHub Actions run is the source of truth.
+
+1. Check the PR's CI status:
+
+       gh pr checks <PR_NUMBER> --repo <owner>/<repo> --watch
+
+   If `--watch` is unavailable, poll with `gh pr checks` until all
+   checks complete.
+2. If all checks pass, proceed to Phase 9.
+3. If any check fails:
+   a. Inspect the failure using `gh run view <run_id> --log-failed`
+   b. Fix the issue, commit, and push
+   c. Wait for the new CI run to complete and re-check
+4. Repeat until CI is green.
+
+## Phase 9: Present
 
 Give the user:
 
@@ -158,8 +177,8 @@ Give the user:
   presenting plans for approval) needs the main context. Push exploration,
   implementation, and review to subagents (Task tool) to keep the main
   context lean. Phase 2 exploration, Phase 5 implementation of individual
-  tasks, Phase 6 verification, and Phase 7 review are all good candidates
-  for delegation.
+  tasks, Phase 6 verification, Phase 7 review, and Phase 8 CI confirmation
+  are all good candidates for delegation.
 - **Explore before you ask.** Never ask the user a question you could
   answer by reading the code. Uninformed questions erode trust.
 - **Options reveal understanding.** The quality of your scoping options is
