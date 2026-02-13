@@ -57,10 +57,10 @@ if profile.get("description"):
     print(profile["description"])
 ```
 
-### Search posts
+### Search posts (requires auth)
 
 ```python
-from bsky_client import api
+from bsky_client import api  # Requires SESSION_ID and PROXY_URL
 
 data = api.get("app.bsky.feed.searchPosts", {"q": "python programming", "limit": 10})
 for post in data["posts"]:
@@ -330,7 +330,7 @@ All these work without authentication via `https://public.api.bsky.app/xrpc/`:
 
 ### Authenticated Read Endpoints (Require Proxy)
 
-Feed: getTimeline, getActorLikes | Notifications: listNotifications, getUnreadCount | Graph: getBlocks, getMutes, getListBlocks, getListMutes, getKnownFollowers, getListsWithMembership, getStarterPacksWithMembership | Account: getPreferences, getBookmarks
+Feed: getTimeline, searchPosts, getActorLikes | Notifications: listNotifications, getUnreadCount | Graph: getBlocks, getMutes, getListBlocks, getListMutes, getKnownFollowers, getListsWithMembership, getStarterPacksWithMembership | Account: getPreferences, getBookmarks
 
 ### Write Endpoints (Require Proxy)
 
