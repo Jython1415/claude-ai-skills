@@ -20,3 +20,11 @@ You are running in Claude Code Web (cloud container). Key differences from local
 - Prefer `gh` CLI for PRs, issues, comments (e.g., `gh pr create`, `gh issue comment`)
 - Use `gh api` for GitHub API calls that gh CLI doesn't cover
 - Git operations work normally via the pre-configured origin remote
+
+**Orchestration: delegate by default.**
+
+Main-context capacity is limited and non-renewable. Subagent context is fresh and cheap. Push all granular work — reads, searches, analysis, code, review — to subagents. Reserve the main context for task decomposition, subagent coordination, and final synthesis.
+
+3 consecutive non-spawn tool calls = you're probably doing work that should be delegated. Use the most capable model each subtask needs.
+
+When in doubt, delegate.
