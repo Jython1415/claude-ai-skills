@@ -56,7 +56,6 @@ _PUBLIC_ONLY = {
     "app.bsky.actor.searchActorsTypeahead",
     "app.bsky.actor.getSuggestions",
     # Feed (read)
-    "app.bsky.feed.searchPosts",
     "app.bsky.feed.getAuthorFeed",
     "app.bsky.feed.getPostThread",
     "app.bsky.feed.getPosts",
