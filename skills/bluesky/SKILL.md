@@ -318,7 +318,7 @@ Any XRPC endpoint can be called via `api.get()` or `api.post()` — the librarie
 
 All these work without authentication via `https://public.api.bsky.app/xrpc/`:
 
-**Feed:** searchPosts, getAuthorFeed, getPostThread, getPosts, getQuotes, getFeed, getListFeed, getLikes, getRepostedBy, getActorFeeds, getFeedGenerator, getFeedGenerators, getSuggestedFeeds, describeFeedGenerator
+**Feed:** getAuthorFeed, getPostThread, getPosts, getQuotes, getFeed, getListFeed, getLikes, getRepostedBy, getActorFeeds, getFeedGenerator, getFeedGenerators, getSuggestedFeeds, describeFeedGenerator
 
 **Actors:** getProfile, getProfiles, searchActors, searchActorsTypeahead, getSuggestions
 

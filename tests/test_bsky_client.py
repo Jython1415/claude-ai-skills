@@ -27,7 +27,6 @@ from bsky_client import (
 class TestClassify:
     def test_public_only_endpoints(self):
         assert _classify("app.bsky.actor.getProfile") == "public_only"
-        assert _classify("app.bsky.feed.searchPosts") == "public_only"
         assert _classify("com.atproto.identity.resolveHandle") == "public_only"
         assert _classify("app.bsky.unspecced.getTrendingTopics") == "public_only"
         assert _classify("app.bsky.feed.getPosts") == "public_only"
@@ -42,6 +41,7 @@ class TestClassify:
     def test_auth_required_for_private_read_endpoints(self):
         assert _classify("app.bsky.feed.getTimeline") == "auth_required"
         assert _classify("app.bsky.notification.listNotifications") == "auth_required"
+        assert _classify("app.bsky.feed.searchPosts") == "auth_required"
 
     def test_unknown_endpoint_defaults_to_auth_required(self):
         assert _classify("com.example.unknown.endpoint") == "auth_required"

@@ -2,6 +2,11 @@
 
 All notable changes to the Bluesky Access skill will be documented in this file.
 
+## [2.0.2] - 2026-02-13
+
+### Fixed
+- Reclassified `app.bsky.feed.searchPosts` from `public_only` to `auth_required` — the public API endpoint now returns 403 (BunnyCDN), requiring proxy auth (#101)
+
 ## [2.0.1] - 2026-02-12
 
 ### Changed
