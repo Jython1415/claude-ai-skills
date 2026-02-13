@@ -126,8 +126,8 @@ presented.
    - `uv run ruff check .` (lint)
    - `uv run ruff format --check .` (formatting)
    - `uv run pytest -v` (tests)
-4. If any check fails, fix the issue, commit the fix, and re-run the
-   failing check to confirm it passes
+4. If any check fails, fix the issue, commit the fix, push to the remote
+   branch, and re-run the failing check to confirm it passes
 5. Repeat until all checks pass before proceeding
 
 **Important:** Always derive the checks from the workflow files rather than
