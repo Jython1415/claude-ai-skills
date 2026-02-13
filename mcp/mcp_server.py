@@ -226,26 +226,57 @@ async def report_skill_issue(
     description: str,
     issue_type: str = "bug",
     skill_version: str | None = None,
-    steps_to_reproduce: str | None = None,
-    expected_behavior: str | None = None,
-    actual_behavior: str | None = None,
+    interaction_log: str | None = None,
+    observed_behavior: str | None = None,
+    suggestions: str | None = None,
 ) -> dict:
     """
-    Report a bug or feature request for a skill.
+    Report an observation or propose an idea about a skill.
 
-    Use this tool when a skill is not working as expected or when you have
-    an idea for improving a skill. This creates a GitHub issue on the
-    claude-ai-skills repository with structured information.
+    Use this tool to document what you encountered while using a skill —
+    a script that returned unexpected output, documentation that led you
+    down an inefficient path, or a pattern you discovered that could be
+    made easier. Frame your report as a factual record of what you tried
+    and what happened, not as a directive about what should change.
+
+    Writing style:
+        - Title: Describe what you observed, not what should change.
+          Good: "searchPosts routes to public endpoint, returns 403"
+          Avoid: "searchPosts needs to be reclassified as auth_required"
+        - Description: Lead with context — what you were trying to
+          accomplish and which parts of the skill you interacted with.
+        - Present findings as observations, not verdicts. Use "appeared
+          to", "seemed to", "returned" rather than "is broken", "fails",
+          "is dead code".
+        - For suggestions, frame as proposals: "One approach might be..."
+          or "It could help to..." rather than "The fix is..." or
+          "This needs to...".
 
     Args:
         skill_name: Name of the skill ("bluesky", "git-proxy", "gmail", "sift")
-        title: Brief issue title (max 200 chars)
-        description: Detailed description of the issue or enhancement
-        issue_type: Type of issue ("bug" or "enhancement", default: "bug")
-        skill_version: Version of the skill if known (e.g., "1.1.0")
-        steps_to_reproduce: For bugs, steps to reproduce the issue
-        expected_behavior: For bugs, what should happen
-        actual_behavior: For bugs, what actually happens
+        title: Brief, observational issue title (max 200 chars). Describe
+            what you observed rather than prescribing a change.
+        description: Context for the observation — what you were trying to
+            accomplish and which parts of the skill system you interacted with.
+        issue_type: "bug" (unexpected behavior observed) or "enhancement"
+            (idea for improvement). Default: "bug"
+        skill_version: Version from the skill's CHANGELOG.md (the version
+            number in the most recent entry, e.g., "2.0.4"). Always check
+            the CHANGELOG.md file packaged with the skill and include this
+            so the maintainer knows what version of the skill you were
+            working with.
+        interaction_log: Step-by-step record of what you did — which skill
+            files you read, scripts you executed (with commands in code
+            blocks), tool calls you made, and how you troubleshot. Include
+            commands and their outputs. Mark each step as succeeded or
+            failed without explaining why.
+        observed_behavior: Numbered factual statements of what occurred.
+            Present comparative data neutrally — show before/after states,
+            different error messages, or alternate approaches as
+            observations rather than conclusions about which is better.
+        suggestions: Proposed improvements or ideas, framed as proposals
+            rather than directives. E.g., "One approach might be to add
+            an auth routing example to the quickstart section."
 
     Returns:
         Dictionary containing:
@@ -256,13 +287,25 @@ async def report_skill_issue(
     Example:
         report_skill_issue(
             skill_name="bluesky",
-            title="Post creation fails with special characters",
-            description="When posting with emoji...",
+            title="searchPosts routes to public endpoint, returns 403",
+            description="While searching for posts by a specific user, "
+                "the client routed searchPosts to the public API.",
             issue_type="bug",
-            skill_version="1.0.0",
-            steps_to_reproduce="1. Run post.py with emoji in text\n2. Check response",
-            expected_behavior="Post should be created successfully",
-            actual_behavior="Returns 400 error"
+            skill_version="2.0.1",
+            interaction_log="1. Read bsky_client.py, noted searchPosts "
+                "in _PUBLIC_ONLY set\\n"
+                "2. Ran: `api.get('app.bsky.feed.searchPosts', "
+                "{'q': 'claude', 'limit': 3})` — returned 403\\n"
+                "3. Tested direct curl to public endpoint — also 403\\n"
+                "4. Tested via proxy path — returned 200 with results",
+            observed_behavior="1. Public endpoint "
+                "(public.api.bsky.app) returned 403 from BunnyCDN\\n"
+                "2. Authenticated endpoint (bsky.social) returned 401 "
+                "AuthMissing\\n"
+                "3. Proxy-routed request returned 200 with expected data",
+            suggestions="searchPosts could be moved from _PUBLIC_ONLY to "
+                "the default auth-required path, which appeared to "
+                "resolve the 403 in testing."
         )
     """
     # Validate skill name
@@ -290,16 +333,15 @@ async def report_skill_issue(
     metadata_table = "\n".join(metadata_rows)
 
     # Build issue body
-    body_parts = [metadata_table, "", "## Description", "", description]
+    agent_note = "> *This issue was reported by a Claude.ai agent using the `report_skill_issue` tool.*"
+    body_parts = [agent_note, "", metadata_table, "", "## Description", "", description]
 
-    # Add bug-specific sections if provided
-    if issue_type == "bug":
-        if steps_to_reproduce:
-            body_parts.extend(["", "## Steps to Reproduce", "", steps_to_reproduce])
-        if expected_behavior:
-            body_parts.extend(["", "## Expected Behavior", "", expected_behavior])
-        if actual_behavior:
-            body_parts.extend(["", "## Actual Behavior", "", actual_behavior])
+    if interaction_log:
+        body_parts.extend(["", "## Interaction Log", "", interaction_log])
+    if observed_behavior:
+        body_parts.extend(["", "## Observed Behavior", "", observed_behavior])
+    if suggestions:
+        body_parts.extend(["", "## Suggestions", "", suggestions])
 
     body = "\n".join(body_parts)
 
