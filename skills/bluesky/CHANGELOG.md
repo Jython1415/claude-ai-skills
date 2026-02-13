@@ -2,6 +2,11 @@
 
 All notable changes to the Bluesky Access skill will be documented in this file.
 
+## [2.0.4] - 2026-02-13
+
+### Added
+- Documented PDS `listRecords` pattern for cross-user like queries — scan a user's like records to find which of another user's posts they liked (#102)
+
 ## [2.0.3] - 2026-02-13
 
 ### Added

@@ -194,6 +194,38 @@ engaged = followers & likers
 print(f"{len(engaged)}/{len(followers)} followers liked the post ({len(engaged)/len(followers):.0%})")
 ```
 
+### Find which posts someone liked from a specific user
+
+Uses PDS `listRecords` to scan a user's like records and filter for a target author.
+This is more efficient than checking each post individually — one paginated endpoint
+scans all likes regardless of how many posts the target has.
+
+```python
+from bsky_client import paginate, resolve_handle_to_did
+
+liker_did = resolve_handle_to_did("alice.bsky.social")
+target_did = resolve_handle_to_did("bob.bsky.social")
+
+# Scan the liker's like records from their PDS repository
+like_records = paginate(
+    "com.atproto.repo.listRecords",
+    {"repo": liker_did, "collection": "app.bsky.feed.like"},
+    "records",
+    max_items=10_000,  # cap to limit API calls (~100 per page)
+)
+
+# Filter for likes targeting the specific author's posts
+liked_posts = [
+    r["value"]["subject"]["uri"]
+    for r in like_records
+    if r["value"]["subject"]["uri"].startswith(f"at://{target_did}/")
+]
+
+print(f"{len(liked_posts)} of bob's posts liked by alice")
+for uri in liked_posts:
+    print(f"  {uri}")
+```
+
 ### Create a post (authenticated)
 
 ```python
