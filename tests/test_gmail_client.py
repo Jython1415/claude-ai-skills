@@ -406,6 +406,20 @@ class TestExtractHeaders:
             "References": "<ref1@mail.gmail.com>",
         }
 
+    def test_case_insensitive_matching(self):
+        """Gmail API returns Message-Id (lowercase d); callers request Message-ID."""
+        payload = _make_payload(
+            headers=[
+                {"name": "Message-Id", "value": "<abc@mail.gmail.com>"},
+                {"name": "references", "value": "<ref1@mail.gmail.com>"},
+            ]
+        )
+        headers = extract_headers(payload, ["Message-ID", "References"])
+        assert headers == {
+            "Message-ID": "<abc@mail.gmail.com>",
+            "References": "<ref1@mail.gmail.com>",
+        }
+
     def test_missing_headers_omitted(self):
         payload = _make_payload(headers=[{"name": "From", "value": "alice@example.com"}])
         headers = extract_headers(payload)
@@ -674,13 +688,14 @@ class TestCreateDraft:
         monkeypatch.setenv("SESSION_ID", "s")
         monkeypatch.setenv("PROXY_URL", "https://p")
 
-        # Mock the GET for fetching original message headers
+        # Mock the GET for fetching original message headers.
+        # Gmail API returns "Message-Id" (lowercase 'd'), not "Message-ID".
         mock_get.return_value = _mock_response(
             {
                 "id": "orig-msg",
                 "payload": {
                     "headers": [
-                        {"name": "Message-ID", "value": "<orig@mail.gmail.com>"},
+                        {"name": "Message-Id", "value": "<orig@mail.gmail.com>"},
                         {"name": "References", "value": "<earlier@mail.gmail.com>"},
                     ]
                 },
@@ -714,13 +729,14 @@ class TestCreateDraft:
         monkeypatch.setenv("SESSION_ID", "s")
         monkeypatch.setenv("PROXY_URL", "https://p")
 
-        # Original message has no References header
+        # Original message has no References header.
+        # Gmail API returns "Message-Id" (lowercase 'd'), not "Message-ID".
         mock_get.return_value = _mock_response(
             {
                 "id": "orig-msg",
                 "payload": {
                     "headers": [
-                        {"name": "Message-ID", "value": "<orig@mail.gmail.com>"},
+                        {"name": "Message-Id", "value": "<orig@mail.gmail.com>"},
                     ]
                 },
             }

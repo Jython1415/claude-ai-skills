@@ -2,6 +2,14 @@
 
 All notable changes to the Gmail Access skill will be documented in this file.
 
+## [0.4.1] - 2026-02-14
+
+### Fixed
+- Fix `extract_headers` to use case-insensitive header name matching per RFC 2822 — Gmail API returns `Message-Id` (lowercase 'd') but `create_draft` looked for `Message-ID`, silently skipping threading headers
+
+### Changed
+- Add header casing note to SKILL.md for users making direct API calls
+
 ## [0.4.0] - 2026-02-14
 
 ### Added
