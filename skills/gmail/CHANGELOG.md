@@ -2,6 +2,26 @@
 
 All notable changes to the Gmail Access skill will be documented in this file.
 
+## [0.4.0] - 2026-02-14
+
+### Added
+- `gmail_client.py` — Shared API client library with session-based auth, replacing standalone scripts
+  - Core `api` object with `get()`, `post()`, `delete()`, `patch()`, `put()` methods
+  - `decode_body()`, `extract_body()`, `extract_headers()` for MIME message handling
+  - `search()` — Search messages with decoded headers and snippets
+  - `get_message()` — Fetch full message with decoded body
+  - `get_thread()` — Fetch full thread with all messages decoded
+  - `create_draft()` — Create drafts with correct reply threading (`In-Reply-To`, `References`, `threadId`)
+  - `paginate()` — Cursor-based pagination for any Gmail list endpoint
+
+### Changed
+- Rewrite SKILL.md with library-first approach and inline code examples
+  - Add examples: search, read message, read thread, reply to thread, manage labels, paginate
+  - Add API reference table for all exported functions
+
+### Removed
+- **BREAKING:** Remove all 3 scripts from `scripts/` directory (`list_messages.py`, `read_message.py`, `read_thread.py`), replaced by `gmail_client` library
+
 ## [0.3.0] - 2026-02-12
 
 ### Added
