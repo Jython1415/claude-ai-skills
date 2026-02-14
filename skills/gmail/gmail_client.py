@@ -267,9 +267,14 @@ def extract_body(payload: dict) -> str:
 def extract_headers(payload: dict, names: list[str] | None = None) -> dict[str, str]:
     """Extract headers from a Gmail message payload.
 
+    Matching is case-insensitive per RFC 2822.  The returned dict uses the
+    *requested* casing, not the casing from the API response.  For example,
+    requesting ``["Message-ID"]`` will match a response header named
+    ``Message-Id`` and return the key as ``"Message-ID"``.
+
     Args:
         payload: The ``payload`` object from a Gmail message response.
-        names: Header names to extract (case-sensitive).
+        names: Header names to extract (case-insensitive).
                Defaults to ``["From", "To", "Cc", "Subject", "Date"]``.
 
     Returns:
@@ -277,12 +282,14 @@ def extract_headers(payload: dict, names: list[str] | None = None) -> dict[str, 
     """
     if names is None:
         names = ["From", "To", "Cc", "Subject", "Date"]
-    target = set(names)
+    # Map lowercased name -> requested name for case-insensitive lookup
+    target = {n.lower(): n for n in names}
     result: dict[str, str] = {}
     for header in payload.get("headers", []):
         name = header.get("name", "")
-        if name in target:
-            result[name] = header.get("value", "")
+        requested = target.get(name.lower())
+        if requested is not None:
+            result[requested] = header.get("value", "")
     return result
 
 

@@ -197,6 +197,12 @@ api.delete("drafts/draft456")
 api.put("labels/Label_123", {"name": "Renamed Label"})
 ```
 
+**Header casing note:** When fetching message metadata with `format=metadata`,
+Gmail may return header names in a different case than requested (e.g.,
+`Message-Id` instead of `Message-ID`). The `extract_headers` helper handles
+this automatically with case-insensitive matching. If you parse headers
+manually, compare names case-insensitively.
+
 ## API Reference
 
 ### `gmail_client` -- API client and helpers
