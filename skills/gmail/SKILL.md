@@ -3,249 +3,292 @@ name: gmail
 description: Search and interact with Gmail via credential proxy
 ---
 
-# Gmail Access Skill
+# Gmail Skill
 
-Access Gmail APIs through the credential proxy. Credentials are managed server-side - no tokens appear in Claude's context.
+Access Gmail APIs through the credential proxy via one Python library:
 
-## Prerequisites
+- **`gmail_client`** -- API client with session-based auth, MIME decoding, and high-level helpers for common workflows
 
-1. **MCP Custom Connector**: Add the credential proxy MCP server as a custom connector in Claude.ai
-2. **Gmail Credentials**: Configured on the proxy server in `credentials.json` with OAuth2 setup
+All operations require authentication through the credential proxy. Credentials stay on the proxy server; Claude only gets time-limited session tokens.
 
 ## Setup
 
-Before using this skill, create a session using the MCP tools:
+Add the skill directory to `sys.path`:
+
+```python
+import sys
+sys.path.insert(0, "/path/to/skills/gmail")
+```
+
+Create a session using the `create_session` MCP tool:
 
 ```
-Use create_session with services: ["gmail"]
+create_session(services=["gmail"], ttl_minutes=30)
 ```
 
-This returns `session_id` and `proxy_url` (a public HTTPS URL via Cloudflare Tunnel, e.g., `https://proxy.joshuashew.com`) - set these as environment variables for scripts.
+Then set the returned values as environment variables:
 
-## Environment Variables
+```python
+import os
+os.environ["SESSION_ID"] = "<session_id from create_session>"
+os.environ["PROXY_URL"] = "<proxy_url from create_session>"
+```
 
-Scripts expect these environment variables (provided by MCP session):
+Once set, `api.get()`, `api.post()`, `api.delete()`, `api.patch()`, and `api.put()` automatically route through the credential proxy. No additional configuration is needed.
 
-| Variable | Description |
-|----------|-------------|
-| `SESSION_ID` | Session ID from create_session |
-| `PROXY_URL` | Public proxy URL from create_session (Cloudflare Tunnel URL) |
-| `GMAIL_SERVICE` | Service name for Gmail account (default: `gmail`) |
+Sessions are service-agnostic -- one session can grant access to multiple services (e.g., `["gmail", "bsky"]`). Sessions expire after the specified TTL (default 30 minutes).
 
-## Multi-Account Support
+### Multi-account support
 
-Multiple Gmail accounts can be configured with custom service names (e.g., `gmail_personal`, `gmail_work`).
+Multiple Gmail accounts can be configured with custom service names (e.g., `gmail_personal`, `gmail_work`). Set the `GMAIL_SERVICE` environment variable to target a non-default account:
 
-### Using a Specific Account
-
-Set the `GMAIL_SERVICE` environment variable to target a non-default account:
-
-```bash
-GMAIL_SERVICE=gmail_work SESSION_ID=abc123 PROXY_URL=https://proxy.example.com python list_messages.py
+```python
+os.environ["GMAIL_SERVICE"] = "gmail_work"
 ```
 
 When creating a session, include the specific service name:
 
 ```
-Use create_session with services: ["gmail_work"]
+create_session(services=["gmail_work"], ttl_minutes=30)
 ```
 
-## Common Tasks
+## Examples
 
-**Always check scripts/ first** before writing inline API code. The scripts handle authentication, error handling, and response formatting.
+### Search messages
 
-| Task | Script | Example |
-|------|--------|---------|
-| List or search messages | `list_messages.py` | `python list_messages.py "from:alice is:unread" 10` |
-| Read a single message | `read_message.py` | `python read_message.py <message_id>` |
-| Read an email thread | `read_thread.py` | `python read_thread.py <thread_id>` |
-| Find and read a thread | `read_thread.py` | `python read_thread.py --search "subject:meeting"` |
-| Custom query / write ops | Direct API call | See [Direct API Usage](#direct-api-usage) below |
-
-## Scripts
-
-### list_messages.py - Search and list messages
-
-```bash
-python list_messages.py [query] [max_results]
-```
-
-Returns message metadata (From, To, Subject, Date) and preview snippet for each match.
-
-**Examples:**
-
-```bash
-# List 10 most recent messages
-python list_messages.py
+```python
+from gmail_client import search
 
 # Search with Gmail query operators
-python list_messages.py "from:example@gmail.com is:unread" 25
-
-# All starred messages
-python list_messages.py "is:starred"
+results = search("from:alice@example.com is:unread", max_results=10)
+for msg in results:
+    h = msg["headers"]
+    print(f"From: {h.get('From')}  Subject: {h.get('Subject')}")
+    print(f"  Preview: {msg['snippet'][:80]}")
+    print(f"  ID: {msg['id']}  Thread: {msg['threadId']}")
 ```
 
-### read_message.py - Read a single message body
-
-```bash
-python read_message.py <message_id>
-```
-
-Fetches the full message and decodes the MIME body (prefers text/plain, falls back to text/html). Outputs headers (From, To, Cc, Subject, Date) followed by the message body.
-
-**Example:**
-
-```bash
-# Get message ID from list_messages.py, then read it
-python read_message.py 18d1a2b3c4d5e6f7
-```
-
-### read_thread.py - Read an entire email thread
-
-```bash
-python read_thread.py <thread_id>
-python read_thread.py --search "query"
-```
-
-Fetches all messages in a thread and displays them in chronological order with decoded bodies. Accepts a thread ID directly, or use `--search` to find a thread by Gmail query.
-
-**Examples:**
-
-```bash
-# Read thread by ID
-python read_thread.py 18d1a2b3c4d5e6f7
-
-# Search for a thread and read it
-python read_thread.py --search "subject:weekly sync from:manager"
-```
-
-## Direct API Usage
-
-For operations not covered by scripts (drafts, labels, custom queries), use the Gmail API directly via the credential proxy.
-
-### List Recent Messages
+### Read a full message
 
 ```python
-import os
-import requests
+from gmail_client import get_message
 
-SESSION_ID = os.environ['SESSION_ID']
-PROXY_URL = os.environ['PROXY_URL']
-
-response = requests.get(
-    f"{PROXY_URL}/proxy/gmail/gmail/v1/users/me/messages",
-    params={"maxResults": 10},
-    headers={"X-Session-Id": SESSION_ID}
-)
-
-for msg in response.json().get("messages", []):
-    msg_id = msg["id"]
-    # Fetch full message details
-    msg_response = requests.get(
-        f"{PROXY_URL}/proxy/gmail/gmail/v1/users/me/messages/{msg_id}",
-        params={"format": "metadata", "metadataHeaders": ["From", "To", "Subject", "Date"]},
-        headers={"X-Session-Id": SESSION_ID}
-    )
-    print(msg_response.json())
+msg = get_message("18d1a2b3c4d5e6f7")
+print(f"From: {msg['headers'].get('From')}")
+print(f"Subject: {msg['headers'].get('Subject')}")
+print(f"Labels: {msg['labelIds']}")
+print()
+print(msg["body"])
 ```
 
-### Search Messages
+### Read an email thread
 
 ```python
-response = requests.get(
-    f"{PROXY_URL}/proxy/gmail/gmail/v1/users/me/messages",
-    params={"q": "from:example@gmail.com is:unread", "maxResults": 25},
-    headers={"X-Session-Id": SESSION_ID}
-)
+from gmail_client import get_thread
+
+thread = get_thread("18d1a2b3c4d5e6f7")
+print(f"Thread {thread['id']} — {len(thread['messages'])} messages\n")
+for i, msg in enumerate(thread["messages"], 1):
+    h = msg["headers"]
+    print(f"--- Message {i} ---")
+    print(f"From: {h.get('From')}  Date: {h.get('Date')}")
+    print(msg["body"])
+    print()
 ```
 
-### Get a Specific Message
+### Create a draft
 
 ```python
-msg_id = "1234567890abcdef"
-response = requests.get(
-    f"{PROXY_URL}/proxy/gmail/gmail/v1/users/me/messages/{msg_id}",
-    params={"format": "full"},
-    headers={"X-Session-Id": SESSION_ID}
-)
-print(response.json())
+from gmail_client import create_draft
+
+draft = create_draft("bob@example.com", "Meeting notes", "Here are the notes from today...")
+print(f"Draft created: {draft['id']}")
 ```
 
-### Create a Draft
+### Reply to a thread
+
+Creates a draft with correct threading headers (`In-Reply-To`, `References`, `threadId`) so it appears as a reply in the conversation:
 
 ```python
-import base64
-from email.mime.text import MIMEText
+from gmail_client import create_draft, get_thread
 
-# Create MIME message
-message = MIMEText("Hello from the credential proxy!")
-message["To"] = "recipient@example.com"
-message["Subject"] = "Test Email"
+# Get the thread to find the message to reply to
+thread = get_thread("18d1a2b3c4d5e6f7")
+last_msg = thread["messages"][-1]
 
-# Encode message
-raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-
-# Create draft via API
-response = requests.post(
-    f"{PROXY_URL}/proxy/gmail/gmail/v1/users/me/drafts",
-    json={"message": {"raw": raw}},
-    headers={"X-Session-Id": SESSION_ID}
+draft = create_draft(
+    last_msg["headers"]["From"],      # Reply to sender
+    f"Re: {last_msg['headers'].get('Subject', '')}",
+    "Thanks for the update!",
+    thread_id=thread["id"],           # Attach to thread
+    reply_to_msg_id=last_msg["id"],   # Sets In-Reply-To and References
 )
-print(response.json())
+print(f"Reply draft created: {draft['id']}")
 ```
+
+### Search and read a conversation
+
+```python
+from gmail_client import search, get_thread
+
+# Find a thread by searching for a message in it
+results = search("subject:weekly sync from:manager", max_results=1)
+if results:
+    thread = get_thread(results[0]["threadId"])
+    print(f"Thread: {thread['messages'][0]['headers'].get('Subject')}")
+    print(f"Messages: {len(thread['messages'])}")
+    for msg in thread["messages"]:
+        print(f"\n  {msg['headers'].get('From')} — {msg['headers'].get('Date')}")
+        print(f"  {msg['body'][:200]}")
+```
+
+### Manage labels
+
+```python
+from gmail_client import api
+
+# List all labels
+labels = api.get("labels")
+for label in labels.get("labels", []):
+    print(f"{label['id']}: {label['name']}")
+
+# Create a label
+new_label = api.post("labels", {"name": "Project/Alpha"})
+print(f"Created label: {new_label['id']}")
+
+# Add a label to a message
+api.post("messages/msg123/modify", {"addLabelIds": [new_label["id"]]})
+
+# Remove a label from a message
+api.post("messages/msg123/modify", {"removeLabelIds": [new_label["id"]]})
+```
+
+### Paginate through results
+
+```python
+from gmail_client import paginate
+
+# Fetch all messages matching a query (handles pagination automatically)
+all_messages = paginate("messages", {"q": "label:important"}, "messages", max_items=500)
+print(f"Fetched {len(all_messages)} messages")
+
+# Paginate threads
+all_threads = paginate("threads", {"q": "is:unread"}, "threads", page_size=50)
+```
+
+### Direct API calls
+
+For operations not covered by helpers, use `api` directly:
+
+```python
+from gmail_client import api
+
+# Get user profile
+profile = api.get("profile")
+print(f"{profile['emailAddress']} — {profile['messagesTotal']} messages")
+
+# Trash a message
+api.post("messages/msg123/trash")
+
+# Delete a draft
+api.delete("drafts/draft456")
+
+# Update a label
+api.put("labels/Label_123", {"name": "Renamed Label"})
+```
+
+## API Reference
+
+### `gmail_client` -- API client and helpers
+
+**Core API** (all require `SESSION_ID` and `PROXY_URL`):
+
+| Function | Description |
+|----------|-------------|
+| `api.get(path, params)` | GET request to `gmail/v1/users/me/{path}` |
+| `api.post(path, json)` | POST request |
+| `api.delete(path)` | DELETE request |
+| `api.patch(path, json)` | PATCH request |
+| `api.put(path, json)` | PUT request |
+
+**Message helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `decode_body(data)` | Decode a base64url-encoded body part |
+| `extract_body(payload)` | Walk MIME tree, return text (prefers plain over HTML) |
+| `extract_headers(payload, names)` | Extract named headers from a message payload |
+
+**High-level operations:**
+
+| Function | Description |
+|----------|-------------|
+| `search(query, max_results=10)` | Search messages, return dicts with decoded headers and snippet |
+| `get_message(message_id)` | Full message with decoded body, headers, and labels |
+| `get_thread(thread_id)` | Full thread with all messages decoded |
+| `create_draft(to, subject, body, *, thread_id, reply_to_msg_id)` | Create draft with optional reply threading |
+| `paginate(path, params, result_key, *, max_items, page_size)` | Fetch all pages from a paginated endpoint |
+
+### Path construction
+
+All `api.*()` methods build the full URL automatically:
+
+```
+{PROXY_URL}/proxy/{GMAIL_SERVICE}/gmail/v1/users/me/{path}
+```
+
+Where `GMAIL_SERVICE` defaults to `"gmail"`. You only provide the `path` argument (e.g., `"messages"`, `"threads/abc123"`, `"drafts"`).
 
 ## Available Endpoints
 
-All Gmail API v1 endpoints are available via `/proxy/gmail/gmail/v1/users/me/...`. Common ones:
+Common Gmail API v1 endpoints (pass the path after `users/me/` to `api.*()` methods):
 
-> **Note:** For non-default accounts, substitute the service name in the proxy path (e.g., `/proxy/gmail_work/gmail/v1/users/me/...` instead of `/proxy/gmail/gmail/v1/users/me/...`).
+> **Note:** For non-default accounts, set the `GMAIL_SERVICE` environment variable. The client handles the proxy path automatically.
 
 ### Message Operations
-- `gmail/v1/users/me/messages` - List/search messages (GET with `q` and `maxResults` params)
-- `gmail/v1/users/me/messages/{id}` - Get message by ID (GET with `format` and `metadataHeaders` params)
-- `gmail/v1/users/me/messages/{id}/modify` - Modify message labels (POST)
-- `gmail/v1/users/me/messages/{id}/trash` - Move message to trash (POST)
-- `gmail/v1/users/me/messages/{id}/untrash` - Remove message from trash (POST)
+- `messages` -- List/search messages (GET with `q` and `maxResults` params)
+- `messages/{id}` -- Get message by ID (GET with `format` and `metadataHeaders` params)
+- `messages/{id}/modify` -- Modify message labels (POST)
+- `messages/{id}/trash` -- Move message to trash (POST)
+- `messages/{id}/untrash` -- Remove message from trash (POST)
 
-> **Note:** `messages/send` is blocked by the proxy - use drafts instead.
-
-### Label Operations
-- `gmail/v1/users/me/labels` - List all labels (GET)
-- `gmail/v1/users/me/labels/{id}` - Get label by ID (GET)
-- `gmail/v1/users/me/labels` - Create label (POST)
-- `gmail/v1/users/me/labels/{id}` - Update label (PUT)
-- `gmail/v1/users/me/labels/{id}` - Delete label (DELETE)
+> **Note:** `messages/send` is blocked by the proxy -- use drafts instead.
 
 ### Thread Operations
-- `gmail/v1/users/me/threads` - List threads (GET)
-- `gmail/v1/users/me/threads/{id}` - Get thread by ID (GET)
-- `gmail/v1/users/me/threads/{id}/modify` - Modify thread labels (POST)
-- `gmail/v1/users/me/threads/{id}/trash` - Move thread to trash (POST)
-- `gmail/v1/users/me/threads/{id}/untrash` - Remove thread from trash (POST)
+- `threads` -- List threads (GET)
+- `threads/{id}` -- Get thread by ID (GET)
+- `threads/{id}/modify` -- Modify thread labels (POST)
+- `threads/{id}/trash` -- Move thread to trash (POST)
+- `threads/{id}/untrash` -- Remove thread from trash (POST)
 
 ### Draft Operations
-- `gmail/v1/users/me/drafts` - List/create drafts (GET/POST)
-- `gmail/v1/users/me/drafts/{id}` - Get/update/delete draft (GET/PUT/DELETE)
+- `drafts` -- List/create drafts (GET/POST)
+- `drafts/{id}` -- Get/update/delete draft (GET/PUT/DELETE)
 
 > **Note:** `drafts/send` is blocked by the proxy.
 
-### Profile Operations
-- `gmail/v1/users/me/profile` - Get user profile (email, total messages, threads count)
+### Label Operations
+- `labels` -- List/create labels (GET/POST)
+- `labels/{id}` -- Get/update/delete label (GET/PUT/DELETE)
 
-### Search Query Operators
+### Profile
+- `profile` -- Get user profile (email, total messages, threads count)
+
+## Search Query Operators
 
 Gmail supports powerful search operators in the `q` parameter:
-- `from:user@example.com` - From specific sender
-- `to:user@example.com` - To specific recipient
-- `subject:meeting` - Subject contains text
-- `is:unread` - Unread messages
-- `is:starred` - Starred messages
-- `has:attachment` - Has attachments
-- `label:important` - Has label
-- `after:2024/01/01` - After date
-- `before:2024/12/31` - Before date
-- `newer_than:7d` - Newer than 7 days
-- `older_than:1m` - Older than 1 month
+
+- `from:user@example.com` -- From specific sender
+- `to:user@example.com` -- To specific recipient
+- `subject:meeting` -- Subject contains text
+- `is:unread` -- Unread messages
+- `is:starred` -- Starred messages
+- `has:attachment` -- Has attachments
+- `label:important` -- Has label
+- `after:2024/01/01` -- After date
+- `before:2024/12/31` -- Before date
+- `newer_than:7d` -- Newer than 7 days
+- `older_than:1m` -- Older than 1 month
 
 ## Security
 
@@ -260,10 +303,10 @@ Gmail supports powerful search operators in the `q` parameter:
 The proxy enforces endpoint-level filtering for defense-in-depth, independent of OAuth scopes:
 
 **Blocked:**
-- **Send** (`messages/send`, `drafts/send`) - Email cannot be sent through the proxy; use drafts instead
-- **Permanent delete** (`DELETE messages/{id}`, `DELETE threads/{id}`, `batchDelete`) - Use trash instead
-- **Insert/Import** (`POST messages`, `messages/import`) - Direct message insertion is blocked
-- **Settings** (all `settings/*` endpoints) - Forwarding, delegates, filters, and other settings are blocked
+- **Send** (`messages/send`, `drafts/send`) -- Email cannot be sent through the proxy; use drafts instead
+- **Permanent delete** (`DELETE messages/{id}`, `DELETE threads/{id}`, `batchDelete`) -- Use trash instead
+- **Insert/Import** (`POST messages`, `messages/import`) -- Direct message insertion is blocked
+- **Settings** (all `settings/*` endpoints) -- Forwarding, delegates, filters, and other settings are blocked
 
 **Allowed:**
 - Read messages, threads, drafts, labels, profile, history
@@ -271,6 +314,12 @@ The proxy enforces endpoint-level filtering for defense-in-depth, independent of
 - Label CRUD (create, read, update, delete)
 - Modify labels on messages/threads (`modify`, `batchModify`)
 - Trash/untrash messages and threads
+
+## Rate Limits
+
+**Credential proxy:** 300 requests/minute per session.
+
+**Gmail API quotas:** Gmail API has per-user and per-project quotas. Most read operations cost 5 quota units; batch operations cost more. See [Gmail API usage limits](https://developers.google.com/gmail/api/reference/quota) for details.
 
 ## Reporting Issues
 
