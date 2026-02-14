@@ -60,6 +60,10 @@ git-proxy-workspace/
 # Skill packages (build artifacts)
 skills/*-skill.zip
 
+# Test/coverage artifacts
+.coverage
+htmlcov/
+
 # Temporary files
 _temp_*
 tmp/
