@@ -489,3 +489,40 @@ def create_draft(
         draft_body["message"]["threadId"] = thread_id
 
     return api.post("drafts", draft_body)
+
+
+def get_profile() -> dict:
+    """Get the authenticated user's Gmail profile.
+
+    Returns a dict with emailAddress, messagesTotal, threadsTotal, historyId.
+    Useful as a cheap preflight check before broad searches.
+    """
+    return api.get("profile")
+
+
+def search_threads(query: str = "", max_results: int = 10) -> list[dict]:
+    """Search for threads and return full thread objects.
+
+    Combines the threads.list and threads.get calls into one convenience
+    function. Each returned thread includes its full message list.
+
+    Args:
+        query: Gmail search query (same syntax as the Gmail search box).
+        max_results: Maximum number of threads to return (default 10).
+
+    Returns:
+        List of thread objects, each with id, messages, and other fields.
+    """
+    params = {"maxResults": max_results}
+    if query:
+        params["q"] = query
+
+    data = api.get("threads", params)
+    thread_stubs = data.get("threads", [])
+
+    threads = []
+    for stub in thread_stubs:
+        thread = api.get(f"threads/{stub['id']}")
+        threads.append(thread)
+
+    return threads
