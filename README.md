@@ -88,12 +88,12 @@ Use create_session with services: ["bsky", "git"]
 launchctl list | grep joshuashew
 
 # View logs
-tail -f ~/Library/Logs/com.joshuashew.credential-proxy.log
-tail -f ~/Library/Logs/com.joshuashew.mcp-server.log
-tail -f ~/Library/Logs/com.joshuashew.cloudflare-tunnel.log
+tail -f ~/Library/Logs/com.joshuashew.claude-ai-skills.proxy.log
+tail -f ~/Library/Logs/com.joshuashew.claude-ai-skills.mcp.log
+tail -f ~/Library/Logs/com.joshuashew.claude-ai-skills.tunnel.log
 
 # Audit log (JSON Lines — session lifecycle, proxy requests, git operations)
-tail -f ~/Library/Logs/credential-proxy-audit.jsonl
+tail -f ~/Library/Logs/claude-ai-skills-audit.jsonl
 ```
 
 If the Cloudflare Tunnel system service is missing (e.g. after `brew upgrade cloudflared`),
