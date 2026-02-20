@@ -13,8 +13,7 @@ Before setting up the Gmail skill, you need:
 1. **Google Cloud Project** - Create a project at [Google Cloud Console](https://console.cloud.google.com)
 2. **Enable Gmail API** - Enable the Gmail API for your project
 3. **OAuth 2.0 Credentials** - Create OAuth 2.0 credentials (Desktop app type)
-4. **Redirect URI** - Add `http://localhost:8080` to authorized redirect URIs in your OAuth credentials
-5. **Client Credentials** - You'll need your `client_id` and `client_secret` from the OAuth credentials
+4. **Client Credentials** - You'll need your `client_id` and `client_secret` from the OAuth credentials
 
 You can manage all of this at: https://console.cloud.google.com/apis/credentials
 

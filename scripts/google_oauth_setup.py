@@ -23,6 +23,7 @@ The script will:
 """
 
 import json
+import socket
 import sys
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -147,6 +148,13 @@ def select_scopes() -> list[str]:
             return scopes
         else:
             print("Invalid choice. Please enter 1-4.")
+
+
+def find_free_port() -> int:
+    """Find an available port on localhost."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("localhost", 0))
+        return s.getsockname()[1]
 
 
 def start_oauth_flow(client_id: str, client_secret: str, scopes: list[str], port: int = 8080) -> str | None:
@@ -483,9 +491,7 @@ def refresh_service():
     print(f"\nRefreshing '{target}' with scopes: {', '.join(scopes)}")
     print("Using stored client credentials.")
 
-    port_input = get_input("Enter callback port (default: 8080): ", required=False)
-    port = int(port_input) if port_input else 8080
-
+    port = find_free_port()
     refresh_token = start_oauth_flow(client_id, client_secret, scopes, port)
     if not refresh_token:
         print("\nOAuth flow failed. Please try again.")
@@ -521,7 +527,6 @@ Before starting, make sure you have:
 1. Created a Google Cloud project
 2. Enabled the required APIs (Gmail, Calendar, Drive)
 3. Created OAuth 2.0 credentials (Desktop app type)
-4. Added http://localhost:8080 to authorized redirect URIs
 
 You can do this at: https://console.cloud.google.com/apis/credentials
 """
@@ -581,17 +586,11 @@ For multi-account setup, use descriptive names like 'gmail_work' or 'gmail_perso
 
     service_name = get_input("Enter service name: ")
 
-    # Get port (optional)
-    print("\n" + "-" * 60)
-    print("Step 4: Configure callback server")
-    print("-" * 60)
-
-    port_input = get_input("Enter callback port (default: 8080): ", required=False)
-    port = int(port_input) if port_input else 8080
-
     # Start OAuth flow
+    port = find_free_port()
+
     print("\n" + "-" * 60)
-    print("Step 5: Authorize with Google")
+    print("Step 4: Authorize with Google")
     print("-" * 60)
 
     try:
@@ -605,7 +604,7 @@ For multi-account setup, use descriptive names like 'gmail_work' or 'gmail_perso
 
         # Save credentials
         print("\n" + "-" * 60)
-        print("Step 6: Save credentials")
+        print("Step 5: Save credentials")
         print("-" * 60)
 
         if save_credentials(service_name, client_id, client_secret, refresh_token, scopes):
