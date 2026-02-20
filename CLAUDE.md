@@ -145,6 +145,26 @@ def my_tool(arg: str) -> str:
 
 Tests import and call `_my_tool_impl` directly. See `tests/test_local_server.py` for examples.
 
+## Skill Versioning
+
+Each skill has `VERSION` and `CHANGELOG.md` files in its directory. **Any PR that modifies
+files under `skills/<name>/` must bump the VERSION and add a CHANGELOG entry.** This is
+enforced by the `check-version-bump` CI workflow — PRs will fail without it.
+
+- Bump the patch version for fixes, minor version for new features
+- Follow the existing CHANGELOG format (`## [x.y.z] - YYYY-MM-DD` with `### Added/Changed/Fixed` subsections)
+
+## CI Checks
+
+PRs run two CI workflows:
+- **test** — `ruff check`, `ruff format --check`, `pytest` with coverage
+- **check-version-bump** — Verifies VERSION is bumped when skill files change
+
+Both must pass before merge. Run locally before pushing:
+```bash
+uv run ruff check && uv run ruff format --check && uv run pytest
+```
+
 ## Dependencies
 
 Managed via `pyproject.toml` and uv:
