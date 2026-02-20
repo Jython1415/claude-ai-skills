@@ -65,9 +65,7 @@ class TestTestProxy:
     def test_get_with_admin_key(self, mock_config, mock_request):
         """GET requests send X-Auth-Key header by default."""
         mock_config.return_value = ("http://localhost:8443", "secret")
-        mock_request.return_value = self._mock_response(
-            json_data={"status": "healthy"}
-        )
+        mock_request.return_value = self._mock_response(json_data={"status": "healthy"})
 
         result = _test_proxy_impl("GET", "/health")
 
@@ -82,9 +80,7 @@ class TestTestProxy:
     def test_get_with_session_id(self, mock_config, mock_request):
         """When session_id is provided, sends X-Session-Id instead of X-Auth-Key."""
         mock_config.return_value = ("http://localhost:8443", "secret")
-        mock_request.return_value = self._mock_response(
-            json_data={"feed": []}
-        )
+        mock_request.return_value = self._mock_response(json_data={"feed": []})
 
         _test_proxy_impl("GET", "/proxy/bsky/app.bsky.feed.getTimeline", session_id="sess-123")
 
@@ -97,9 +93,7 @@ class TestTestProxy:
     def test_post_with_json_body(self, mock_config, mock_request):
         """POST requests forward JSON body."""
         mock_config.return_value = ("http://localhost:8443", "secret")
-        mock_request.return_value = self._mock_response(
-            json_data={"session_id": "new-sess"}
-        )
+        mock_request.return_value = self._mock_response(json_data={"session_id": "new-sess"})
 
         _test_proxy_impl("POST", "/sessions", body='{"services": ["bsky"], "ttl_minutes": 30}')
 

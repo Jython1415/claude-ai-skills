@@ -270,9 +270,7 @@ class TestGetPostFromUrl:
         get_post_from_url("https://bsky.app/profile/did:plc:abc/post/3xyz", depth=2)
 
         call_params = mock_get.call_args
-        assert "depth" in call_params.kwargs.get("params", {}) or any(
-            "depth" in str(a) for a in call_params.args
-        )
+        assert "depth" in call_params.kwargs.get("params", {}) or any("depth" in str(a) for a in call_params.args)
 
     def test_rejects_invalid_url(self):
         with pytest.raises(ValueError, match="Invalid bsky.app post URL"):
