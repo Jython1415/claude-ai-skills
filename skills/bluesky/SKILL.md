@@ -81,12 +81,9 @@ data = api.get("app.bsky.feed.searchPosts", {"q": "claude", "limit": 5, "author"
 ### Get a post thread
 
 ```python
-from bsky_client import api, url_to_at_uri
+from bsky_client import get_post_from_url
 
-uri = url_to_at_uri("https://bsky.app/profile/bsky.app/post/3abc123")
-data = api.get("app.bsky.feed.getPostThread", {"uri": uri, "depth": 6})
-
-thread = data["thread"]
+thread = get_post_from_url("https://bsky.app/profile/bsky.app/post/3abc123")
 post = thread["post"]
 print(f"@{post['author']['handle']}: {post['record']['text']}")
 for reply in thread.get("replies", []):
@@ -280,6 +277,7 @@ for t in trends.get("trends", []):
 | `resolve_handle_to_did(handle)` | Resolve a handle to a DID |
 | `resolve_did_to_handle(did)` | Resolve a DID to a handle (returns None on failure) |
 | `url_to_at_uri(url)` | Convert a bsky.app post URL to an AT-URI |
+| `get_post_from_url(url, *, depth)` | Fetch a post thread directly from a bsky.app URL |
 
 ### `bsky_sets` -- Actor collections with set operations
 

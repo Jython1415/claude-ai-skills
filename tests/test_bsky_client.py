@@ -13,6 +13,7 @@ from bsky_client import (
     AuthRequiredError,
     _classify,
     api,
+    get_post_from_url,
     paginate,
     resolve_did_to_handle,
     resolve_handle_to_did,
@@ -222,6 +223,60 @@ class TestUrlToAtUri:
         result = url_to_at_uri("https://bsky.app/profile/did:plc:abc/post/3xyz?foo=bar#section")
 
         assert result == "at://did:plc:abc/app.bsky.feed.post/3xyz"
+
+
+# ---------------------------------------------------------------------------
+# get_post_from_url
+# ---------------------------------------------------------------------------
+
+
+class TestGetPostFromUrl:
+    def _mock_response(self, json_data):
+        resp = MagicMock()
+        resp.json.return_value = json_data
+        resp.raise_for_status.return_value = None
+        return resp
+
+    @patch("bsky_client.requests.get")
+    def test_fetches_thread_from_handle_url(self, mock_get):
+        """Handle URL triggers resolve + getPostThread."""
+        thread_data = {"post": {"author": {"handle": "bsky.app"}, "record": {"text": "hello"}}}
+        mock_get.side_effect = [
+            self._mock_response({"did": "did:plc:abc123"}),
+            self._mock_response({"thread": thread_data}),
+        ]
+
+        result = get_post_from_url("https://bsky.app/profile/bsky.app/post/3abc123")
+
+        assert result == thread_data
+        assert mock_get.call_count == 2
+
+    @patch("bsky_client.requests.get")
+    def test_fetches_thread_from_did_url(self, mock_get):
+        """DID URL skips resolve, only calls getPostThread."""
+        thread_data = {"post": {"author": {"handle": "bsky.app"}, "record": {"text": "hello"}}}
+        mock_get.return_value = self._mock_response({"thread": thread_data})
+
+        result = get_post_from_url("https://bsky.app/profile/did:plc:abc123/post/3abc123")
+
+        assert result == thread_data
+        assert mock_get.call_count == 1
+
+    @patch("bsky_client.requests.get")
+    def test_passes_depth_parameter(self, mock_get):
+        """Custom depth is forwarded to getPostThread."""
+        mock_get.return_value = self._mock_response({"thread": {"post": {}}})
+
+        get_post_from_url("https://bsky.app/profile/did:plc:abc/post/3xyz", depth=2)
+
+        call_params = mock_get.call_args
+        assert "depth" in call_params.kwargs.get("params", {}) or any(
+            "depth" in str(a) for a in call_params.args
+        )
+
+    def test_rejects_invalid_url(self):
+        with pytest.raises(ValueError, match="Invalid bsky.app post URL"):
+            get_post_from_url("https://example.com/not-a-bsky-url")
 
 
 # ---------------------------------------------------------------------------
