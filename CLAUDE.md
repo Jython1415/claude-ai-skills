@@ -31,11 +31,13 @@ Claude.ai
 - `credentials.json` - Your API credentials (gitignored)
 
 ### MCP Server (`mcp/`)
-- `mcp_server.py` - FastMCP server with `create_session`, `revoke_session`, `list_services`, `report_skill_issue`, `service_status`, `service_control`, `service_logs`, `service_setup`
+- `mcp_server.py` - Remote FastMCP server with `create_session`, `revoke_session`, `list_services`, `report_skill_issue`
+  - Runs on port 10000 with Streamable HTTP transport via Cloudflare Tunnel
+  - Uses GitHub OAuth with username allowlist
+- `local_server.py` - Local stdio MCP server with `service_status`, `service_control`, `service_logs`, `service_setup`
+  - Launched by Claude Code via `.mcp.json` — no remote infrastructure needed
+  - Runs outside sandbox, can call `launchctl` directly
 - `services.py` - LaunchAgent service management (discover, start/stop/restart, logs, setup script)
-- Runs on port 10000 with Streamable HTTP transport via Cloudflare Tunnel
-- Uses GitHub OAuth with username allowlist (set `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_ALLOWED_USERS` env vars)
-- No custom middleware needed -- uses default FastMCP directly
 
 ### Skills (`skills/`)
 - `git-proxy/` - Git bundle proxy skill (Python library + packaging)

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "services": {
+      "command": "bash",
+      "args": [".claude/scripts/local-mcp.sh"]
+    }
+  }
+}
