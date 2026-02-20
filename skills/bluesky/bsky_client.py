@@ -7,12 +7,15 @@ multiple services (e.g., Bluesky + Gmail), so the env vars are
 service-agnostic: SESSION_ID and PROXY_URL.
 
 Usage:
-    from bsky_client import api, resolve_handle_to_did, url_to_at_uri
+    from bsky_client import api, resolve_handle_to_did, url_to_at_uri, get_post_from_url
 
     # Auto-routes to public API or proxy based on endpoint and session
     data = api.get("app.bsky.actor.getProfile", {"actor": "bsky.app"})
 
-    # Utility helpers
+    # Fetch a post thread directly from a bsky.app URL
+    thread = get_post_from_url("https://bsky.app/profile/bsky.app/post/3abc123")
+
+    # Lower-level utilities
     did = resolve_handle_to_did("bsky.app")
     uri = url_to_at_uri("https://bsky.app/profile/bsky.app/post/3abc123")
 """
@@ -223,6 +226,23 @@ def url_to_at_uri(url: str) -> str:
         actor = resolve_handle_to_did(actor)
 
     return f"at://{actor}/app.bsky.feed.post/{rkey}"
+
+
+def get_post_from_url(url: str, *, depth: int = 6) -> dict:
+    """Fetch a post thread directly from a bsky.app URL.
+
+    Combines url_to_at_uri() and getPostThread into a single call.
+
+    Args:
+        url: A bsky.app post URL (e.g., "https://bsky.app/profile/handle/post/rkey")
+        depth: Reply thread depth to fetch (default 6)
+
+    Returns:
+        The thread object with keys "post", "replies", "parent".
+    """
+    uri = url_to_at_uri(url)
+    data = api.get("app.bsky.feed.getPostThread", {"uri": uri, "depth": depth})
+    return data["thread"]
 
 
 def paginate(
