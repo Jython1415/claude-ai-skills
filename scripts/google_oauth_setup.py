@@ -481,7 +481,7 @@ def refresh_service():
     scopes = SCOPE_MAPPINGS.get(service_type, SCOPE_MAPPINGS["gmail"])
 
     print(f"\nRefreshing '{target}' with scopes: {', '.join(scopes)}")
-    print(f"Using stored client credentials.")
+    print("Using stored client credentials.")
 
     port_input = get_input("Enter callback port (default: 8080): ", required=False)
     port = int(port_input) if port_input else 8080
