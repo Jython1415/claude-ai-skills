@@ -39,6 +39,24 @@ def _expand(path_str: str) -> Path:
     return Path(path_str).expanduser()
 
 
+def _tail(path: Path, n: int) -> list[str]:
+    """Read the last n lines of a file without loading it all into memory."""
+    buf_size = 8192
+    lines: list[str] = []
+    with path.open("rb") as f:
+        f.seek(0, 2)  # seek to end
+        remaining = f.tell()
+        while remaining > 0 and len(lines) <= n:
+            read_size = min(buf_size, remaining)
+            remaining -= read_size
+            f.seek(remaining)
+            block = f.read(read_size).decode(errors="replace")
+            lines = block.splitlines() + lines
+        # If the file started with a partial first line from our block reads,
+        # the split already handled it correctly.
+    return lines[-n:] if len(lines) > n else lines
+
+
 def label_to_name(label: str) -> str:
     """Extract short name from label ('com.joshuashew.claude-ai-skills.proxy' -> 'proxy')."""
     prefix = LABEL_PREFIX + "."
@@ -139,21 +157,21 @@ def get_service_status_text(name: str, info: dict) -> str:
     # Recent stderr (last 10 lines)
     stderr_path = Path(info["stderr_log"])
     try:
-        stderr_lines = stderr_path.read_text().splitlines()[-10:]
+        stderr_lines = _tail(stderr_path, 10)
         if stderr_lines:
             lines.append(f"\nRecent stderr ({stderr_path.name}):")
             lines.extend(f"  {strip_ansi(line)}" for line in stderr_lines)
-    except FileNotFoundError:
+    except OSError:
         pass
 
     # Recent stdout (last 5 lines)
     stdout_path = Path(info["stdout_log"])
     try:
-        stdout_lines = stdout_path.read_text().splitlines()[-5:]
+        stdout_lines = _tail(stdout_path, 5)
         if stdout_lines:
             lines.append(f"\nRecent stdout ({stdout_path.name}):")
             lines.extend(f"  {line}" for line in stdout_lines)
-    except FileNotFoundError:
+    except OSError:
         pass
 
     return "\n".join(lines)
@@ -162,12 +180,15 @@ def get_service_status_text(name: str, info: dict) -> str:
 def run_launchctl(action: str, label: str) -> str:
     """Run a launchctl start/stop command. Returns status message."""
     try:
-        subprocess.run(
+        result = subprocess.run(
             ["launchctl", action, label],
             capture_output=True,
             text=True,
             timeout=15,
         )
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            return f"ERROR: launchctl {action} {label} failed (exit {result.returncode}): {stderr}"
         past = "Stopped" if action == "stop" else "Started"
         return f"{past} {label}."
     except subprocess.TimeoutExpired:
@@ -194,18 +215,17 @@ def get_logs(label: str, lines: int = 20) -> dict[str, str]:
 
     for key, path in [("stderr", stderr_path), ("stdout", stdout_path)]:
         try:
-            all_lines = path.read_text().splitlines()
-            recent = all_lines[-lines:] if lines else all_lines
+            recent = _tail(path, lines)
             if key == "stderr":
                 recent = [strip_ansi(line) for line in recent]
             result[key] = "\n".join(recent)
-        except FileNotFoundError:
+        except OSError:
             result[key] = f"(no log file at {path})"
 
     return result
 
 
-def run_setup_script(project_dir: Path) -> dict[str, str]:
+def run_setup_script(project_dir: Path) -> dict:
     """Run the setup-launchagents.sh script.
 
     Returns dict with 'success' bool, 'stdout', and 'stderr'.
