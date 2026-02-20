@@ -17,9 +17,11 @@ from gmail_client import (
     extract_body,
     extract_headers,
     get_message,
+    get_profile,
     get_thread,
     paginate,
     search,
+    search_threads,
 )
 
 # ---------------------------------------------------------------------------
@@ -769,3 +771,87 @@ class TestCreateDraft:
 
         call_json = mock_post.call_args[1]["json"]
         assert call_json["message"]["threadId"] == "t1"
+
+
+# ---------------------------------------------------------------------------
+# get_profile
+# ---------------------------------------------------------------------------
+
+
+class TestGetProfile:
+    """Tests for get_profile helper."""
+
+    @patch("gmail_client.requests.get")
+    def test_returns_profile(self, mock_get, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "http://proxy")
+        mock_get.return_value = _mock_response(
+            {"emailAddress": "user@gmail.com", "messagesTotal": 100, "threadsTotal": 50}
+        )
+
+        result = get_profile()
+
+        assert result["emailAddress"] == "user@gmail.com"
+        assert result["messagesTotal"] == 100
+        assert "profile" in mock_get.call_args[0][0]
+
+
+# ---------------------------------------------------------------------------
+# search_threads
+# ---------------------------------------------------------------------------
+
+
+class TestSearchThreads:
+    """Tests for search_threads helper."""
+
+    @patch("gmail_client.requests.get")
+    def test_returns_threads(self, mock_get, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "http://proxy")
+        # First call: threads.list returns stubs
+        list_resp = _mock_response({"threads": [{"id": "t1"}, {"id": "t2"}]})
+        # Second and third calls: threads.get returns full thread objects
+        thread1_resp = _mock_response({"id": "t1", "messages": [{"id": "m1"}]})
+        thread2_resp = _mock_response({"id": "t2", "messages": [{"id": "m2"}]})
+        mock_get.side_effect = [list_resp, thread1_resp, thread2_resp]
+
+        result = search_threads("from:user@example.com")
+
+        assert len(result) == 2
+        assert result[0]["id"] == "t1"
+        assert result[1]["id"] == "t2"
+        assert result[0]["messages"] == [{"id": "m1"}]
+
+    @patch("gmail_client.requests.get")
+    def test_empty_results(self, mock_get, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "http://proxy")
+        mock_get.return_value = _mock_response({})
+
+        result = search_threads("nonexistent")
+
+        assert result == []
+
+    @patch("gmail_client.requests.get")
+    def test_passes_query_and_max_results(self, mock_get, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "http://proxy")
+        mock_get.return_value = _mock_response({})
+
+        search_threads("label:inbox", max_results=5)
+
+        call_params = mock_get.call_args[1]["params"]
+        assert call_params["q"] == "label:inbox"
+        assert call_params["maxResults"] == 5
+
+    @patch("gmail_client.requests.get")
+    def test_omits_query_when_empty(self, mock_get, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "http://proxy")
+        mock_get.return_value = _mock_response({})
+
+        search_threads()
+
+        call_params = mock_get.call_args[1]["params"]
+        assert "q" not in call_params
+        assert call_params["maxResults"] == 10

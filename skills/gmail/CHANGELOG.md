@@ -2,6 +2,15 @@
 
 All notable changes to the Gmail Access skill will be documented in this file.
 
+## [0.5.0] - 2026-02-20
+
+### Added
+- `search_threads(query, max_results)` — Combines threads.list and threads.get into one convenience call, returning full thread objects
+- `get_profile()` — Cheap preflight check returning email address, message/thread counts, and history ID
+
+### Changed
+- Update SKILL.md description with trigger hints for proactive skill loading
+
 ## [0.4.1] - 2026-02-14
 
 ### Fixed

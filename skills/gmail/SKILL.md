@@ -1,6 +1,6 @@
 ---
 name: gmail
-description: Search and interact with Gmail via credential proxy
+description: Search and interact with Gmail via credential proxy. Use this skill when the user references their inbox, asks to find or read an email, mentions a specific sender or subject, or asks to draft a reply.
 ---
 
 # Gmail Skill
