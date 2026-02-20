@@ -358,25 +358,25 @@ Any XRPC endpoint can be called via `api.get()` or `api.post()` — the librarie
 
 ### Public Read Endpoints (No Auth)
 
-All these work without authentication via `https://public.api.bsky.app/xrpc/`:
+All these work without authentication via `https://public.api.bsky.app/xrpc/`. Full NSIDs shown — pass these directly to `api.get()`.
 
-**Feed:** getAuthorFeed, getPostThread, getPosts, getQuotes, getFeed, getListFeed, getLikes, getRepostedBy, getActorFeeds, getFeedGenerator, getFeedGenerators, getSuggestedFeeds, describeFeedGenerator
+**app.bsky.feed.\*:** getAuthorFeed, getPostThread, getPosts, getQuotes, getFeed, getListFeed, getLikes, getRepostedBy, getActorFeeds, getFeedGenerator, getFeedGenerators, getSuggestedFeeds, describeFeedGenerator
 
-**Actors:** getProfile, getProfiles, searchActors, searchActorsTypeahead, getSuggestions
+**app.bsky.actor.\*:** getProfile, getProfiles, searchActors, searchActorsTypeahead, getSuggestions
 
-**Graph:** getFollowers, getFollows, getRelationships, getSuggestedFollowsByActor, getList, getLists, getStarterPack, getStarterPacks, getActorStarterPacks, searchStarterPacks
+**app.bsky.graph.\*:** getFollowers, getFollows, getRelationships, getSuggestedFollowsByActor, getList, getLists, getStarterPack, getStarterPacks, getActorStarterPacks, searchStarterPacks
 
-**Trending:** getTrendingTopics, getTrends, getPopularFeedGenerators, getTaggedSuggestions
+**app.bsky.unspecced.\*:** getTrendingTopics, getTrends, getPopularFeedGenerators, getTaggedSuggestions
 
-**Identity:** resolveHandle | **Repository:** describeRepo, getRecord, listRecords | **Labels:** queryLabels | **Labeler:** getServices
+**com.atproto.identity.\*:** resolveHandle | **com.atproto.repo.\*:** describeRepo, getRecord, listRecords | **com.atproto.label.\*:** queryLabels | **app.bsky.labeler.\*:** getServices
 
 ### Authenticated Read Endpoints (Require Proxy)
 
-Feed: getTimeline, searchPosts, getActorLikes | Notifications: listNotifications, getUnreadCount | Graph: getBlocks, getMutes, getListBlocks, getListMutes, getKnownFollowers, getListsWithMembership, getStarterPacksWithMembership | Account: getPreferences, getBookmarks
+**app.bsky.feed.\*:** getTimeline, searchPosts, getActorLikes | **app.bsky.notification.\*:** listNotifications, getUnreadCount | **app.bsky.graph.\*:** getBlocks, getMutes, getListBlocks, getListMutes, getKnownFollowers, getListsWithMembership, getStarterPacksWithMembership | **app.bsky.actor.\*:** getPreferences | **app.bsky.bookmark.\*:** getBookmarks
 
 ### Write Endpoints (Require Proxy)
 
-Records: createRecord, deleteRecord, putRecord, applyWrites, uploadBlob | Account: putPreferences, createBookmark, deleteBookmark | Notifications: updateSeen, registerPush, putPreferences | Graph mutations: muteActor, unmuteActor, muteActorList, unmuteActorList, muteThread, unmuteThread | Moderation: createReport
+**com.atproto.repo.\*:** createRecord, deleteRecord, putRecord, applyWrites, uploadBlob | **app.bsky.actor.\*:** putPreferences | **app.bsky.bookmark.\*:** createBookmark, deleteBookmark | **app.bsky.notification.\*:** updateSeen, registerPush, putPreferences | **app.bsky.graph.\*:** muteActor, unmuteActor, muteActorList, unmuteActorList, muteThread, unmuteThread | **com.atproto.moderation.\*:** createReport
 
 ### Write Operations Quick Reference
 
@@ -403,7 +403,16 @@ Body: `{repo, collection, rkey}` — extract `rkey` from the record's AT-URI (th
 
 Send raw bytes with `Content-Type` set to the MIME type (e.g., `image/png`). Returns a `blob` object to embed in a post record. Max image size: 1 MB.
 
-**Graph mutations** (simple POST, no createRecord needed):
+**Bookmarks** (direct POST endpoints, no createRecord needed):
+
+| Endpoint | Body | Docs |
+|----------|------|------|
+| `app.bsky.bookmark.createBookmark` | `{uri, cid}` | [docs](https://docs.bsky.app/docs/api/app-bsky-bookmark-create-bookmark) |
+| `app.bsky.bookmark.deleteBookmark` | `{uri}` | [docs](https://docs.bsky.app/docs/api/app-bsky-bookmark-delete-bookmark) |
+
+`uri` and `cid` are the AT-URI and CID of the post to bookmark (get these from the post object).
+
+**Graph mutations** (direct POST endpoints, no createRecord needed):
 
 | Endpoint | Body | Docs |
 |----------|------|------|
