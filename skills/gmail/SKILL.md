@@ -163,6 +163,21 @@ api.post("messages/msg123/modify", {"addLabelIds": [new_label["id"]]})
 api.post("messages/msg123/modify", {"removeLabelIds": [new_label["id"]]})
 ```
 
+### Work with attachments
+
+```python
+from gmail_client import api, extract_attachments, get_attachment
+
+# Fetch raw message with payload
+msg = api.get("messages/msg-id", {"format": "full"})
+attachments = extract_attachments(msg["payload"])
+for att in attachments:
+    print(f"{att['filename']} ({att['mime_type']}, {att['size']} bytes)")
+
+# Download an attachment
+raw_bytes = get_attachment("msg-id", att["attachment_id"])
+```
+
 ### Paginate through results
 
 ```python
@@ -222,8 +237,11 @@ manually, compare names case-insensitively.
 | Function | Description |
 |----------|-------------|
 | `decode_body(data)` | Decode a base64url-encoded body part |
-| `extract_body(payload)` | Walk MIME tree, return text (prefers plain over HTML) |
+| `extract_body(payload)` | Walk MIME tree, return text (prefers plain over HTML, strips HTML on fallback) |
 | `extract_headers(payload, names)` | Extract named headers from a message payload |
+| `strip_html(text)` | Strip HTML tags and decode entities, returning plain text |
+| `extract_attachments(payload)` | Extract attachment metadata (filename, MIME type, size, attachment ID) from message payload |
+| `get_attachment(message_id, attachment_id)` | Download and base64-decode an attachment, returning raw bytes |
 
 **High-level operations:**
 

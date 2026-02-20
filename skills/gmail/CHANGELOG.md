@@ -2,6 +2,16 @@
 
 All notable changes to the Gmail Access skill will be documented in this file.
 
+## [0.6.0] - 2026-02-20
+
+### Added
+- `strip_html(text)` — Strip HTML tags and decode entities using stdlib `html.parser`
+- `extract_attachments(payload)` — Walk MIME tree and return attachment metadata (filename, MIME type, size, attachment ID)
+- `get_attachment(message_id, attachment_id)` — Download and base64-decode an attachment
+
+### Changed
+- `extract_body()` now automatically strips HTML when falling back to `text/html`, returning clean text instead of raw HTML
+
 ## [0.5.0] - 2026-02-20
 
 ### Added
