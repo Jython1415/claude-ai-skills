@@ -7,11 +7,15 @@ the project's LaunchAgent-managed services.
 
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 
-import services
+# Add mcp/ directory to path so we can import services.py
+sys.path.insert(0, os.path.dirname(__file__))
 
-from mcp.server.fastmcp import FastMCP
+import services  # noqa: E402
+from fastmcp import FastMCP  # noqa: E402
 
 mcp = FastMCP("services")
 
