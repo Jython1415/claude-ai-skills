@@ -34,9 +34,10 @@ Claude.ai
 - `mcp_server.py` - Remote FastMCP server with `create_session`, `revoke_session`, `list_services`, `report_skill_issue`
   - Runs on port 10000 with Streamable HTTP transport via Cloudflare Tunnel
   - Uses GitHub OAuth with username allowlist
-- `local_server.py` - Local stdio MCP server with `service_status`, `service_control`, `service_logs`, `service_setup`
+- `local_server.py` - Local stdio MCP server with `service_status`, `service_control`, `service_logs`, `service_setup`, `test_proxy`
   - Launched by Claude Code via `.mcp.json` — no remote infrastructure needed
-  - Runs outside sandbox, can call `launchctl` directly
+  - Runs outside sandbox, can call `launchctl` and `localhost` directly
+  - `test_proxy` reads `PROXY_SECRET_KEY` from `.env` for transparent admin auth
 - `services.py` - LaunchAgent service management (discover, start/stop/restart, logs, setup script)
 
 ### Skills (`skills/`)

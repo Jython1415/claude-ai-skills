@@ -1,15 +1,20 @@
-"""Local MCP server for LaunchAgent service management.
+"""Local MCP server for service management and proxy testing.
 
 Runs as a stdio server launched by Claude Code via .mcp.json.
 Provides tools to check status, control, and read logs for
-the project's LaunchAgent-managed services.
+the project's LaunchAgent-managed services, plus a test_proxy
+tool for making authenticated requests to the local Flask proxy.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
+
+import requests
+from dotenv import dotenv_values
 
 # Add mcp/ directory to path so we can import services.py
 sys.path.insert(0, os.path.dirname(__file__))
@@ -130,6 +135,103 @@ def service_setup() -> str:
         parts.append(f"\n=== stderr ===\n{result['stderr']}")
 
     return "\n".join(parts)
+
+
+def _load_proxy_config() -> tuple[str, str]:
+    """Load proxy URL and admin key from .env.
+
+    Returns:
+        (base_url, admin_key) tuple.
+
+    Raises:
+        RuntimeError: If .env is missing or PROXY_SECRET_KEY is not set.
+    """
+    env_path = _PROJECT_DIR / ".env"
+    if not env_path.exists():
+        raise RuntimeError(f".env not found at {env_path}")
+
+    env = dotenv_values(env_path)
+    admin_key = env.get("PROXY_SECRET_KEY", "")
+    if not admin_key:
+        raise RuntimeError("PROXY_SECRET_KEY not set in .env")
+
+    port = env.get("PORT", "8443")
+    return f"http://localhost:{port}", admin_key
+
+
+def _test_proxy_impl(
+    method: str,
+    path: str,
+    body: str | None = None,
+    session_id: str | None = None,
+) -> str:
+    """Implementation for test_proxy tool (separated for testability)."""
+    try:
+        base_url, admin_key = _load_proxy_config()
+    except RuntimeError as e:
+        return f"Error: {e}"
+
+    url = f"{base_url}{path}"
+    headers: dict[str, str] = {}
+
+    if session_id:
+        headers["X-Session-Id"] = session_id
+    else:
+        headers["X-Auth-Key"] = admin_key
+
+    json_body = None
+    if body:
+        try:
+            json_body = json.loads(body)
+        except json.JSONDecodeError as e:
+            return f"Error: Invalid JSON body: {e}"
+
+    try:
+        response = requests.request(
+            method=method.upper(),
+            url=url,
+            headers=headers,
+            json=json_body,
+            timeout=30,
+        )
+    except requests.exceptions.ConnectionError:
+        return f"Error: Could not connect to {base_url}. Is the proxy running? Check with service_status('proxy')."
+    except requests.exceptions.RequestException as e:
+        return f"Error: {e}"
+
+    parts = [f"HTTP {response.status_code}"]
+
+    content_type = response.headers.get("content-type", "")
+    if "json" in content_type:
+        try:
+            parts.append(json.dumps(response.json(), indent=2))
+        except ValueError:
+            parts.append(response.text)
+    else:
+        parts.append(response.text)
+
+    return "\n".join(parts)
+
+
+@mcp.tool()
+def test_proxy(
+    method: str,
+    path: str,
+    body: str | None = None,
+    session_id: str | None = None,
+) -> str:
+    """Make an authenticated request to the local Flask proxy for testing.
+
+    Reads PROXY_SECRET_KEY from .env automatically. No manual key handling needed.
+
+    Args:
+        method: HTTP method ("GET", "POST", "DELETE").
+        path: Request path (e.g., "/health", "/services", "/proxy/bsky/...").
+        body: Optional JSON body as a string (for POST/PUT requests).
+        session_id: Optional session ID for session-authenticated endpoints.
+            If provided, sends X-Session-Id header instead of X-Auth-Key.
+    """
+    return _test_proxy_impl(method, path, body, session_id)
 
 
 if __name__ == "__main__":
