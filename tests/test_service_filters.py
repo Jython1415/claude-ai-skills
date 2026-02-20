@@ -363,6 +363,160 @@ class TestGmailEdgeCases:
 
 
 # =============================================================================
+# Gmail: Batch endpoint filtering
+# =============================================================================
+
+
+class TestServiceFilterBatch:
+    """Batch endpoint: only POST batch/gmail/v1 is allowed, with GET-only sub-requests."""
+
+    # -- Method checks --
+
+    def test_post_batch_endpoint_allowed(self):
+        allowed, error = validate_gmail_endpoint("POST", "batch/gmail/v1")
+        assert allowed is True
+        assert error == ""
+
+    def test_get_batch_endpoint_blocked(self):
+        """GET on the batch endpoint is not allowed — only POST."""
+        allowed, error = validate_gmail_endpoint("GET", "batch/gmail/v1")
+        assert allowed is False
+
+    def test_post_batch_wrong_version_blocked(self):
+        """batch/gmail/v2 is not the correct path — should be blocked."""
+        allowed, error = validate_gmail_endpoint("POST", "batch/gmail/v2")
+        assert allowed is False
+
+    def test_put_batch_endpoint_blocked(self):
+        """Only POST is permitted; PUT should be blocked."""
+        allowed, error = validate_gmail_endpoint("PUT", "batch/gmail/v1")
+        assert allowed is False
+
+    def test_delete_batch_endpoint_blocked(self):
+        """DELETE on the batch endpoint should be blocked."""
+        allowed, error = validate_gmail_endpoint("DELETE", "batch/gmail/v1")
+        assert allowed is False
+
+    # -- Body validation --
+
+    def test_batch_get_subrequests_allowed(self):
+        """Batch body containing only GET sub-requests should be allowed."""
+        body = (
+            "--batch_abc\r\n"
+            "Content-Type: application/http\r\n"
+            "Content-ID: <item0>\r\n"
+            "\r\n"
+            "GET /gmail/v1/users/me/messages/abc123?format=metadata HTTP/1.1\r\n"
+            "\r\n"
+            "--batch_abc\r\n"
+            "Content-Type: application/http\r\n"
+            "Content-ID: <item1>\r\n"
+            "\r\n"
+            "GET /gmail/v1/users/me/messages/def456?format=metadata HTTP/1.1\r\n"
+            "\r\n"
+            "--batch_abc--"
+        )
+        allowed, error = validate_gmail_endpoint("POST", "batch/gmail/v1", body)
+        assert allowed is True
+        assert error == ""
+
+    def test_batch_post_subrequest_blocked(self):
+        """Batch body with POST sub-request (e.g., send) should be blocked."""
+        body = (
+            "--batch_abc\r\n"
+            "Content-Type: application/http\r\n"
+            "Content-ID: <item0>\r\n"
+            "\r\n"
+            "POST /gmail/v1/users/me/messages/send HTTP/1.1\r\n"
+            "\r\n"
+            "--batch_abc--"
+        )
+        allowed, error = validate_gmail_endpoint("POST", "batch/gmail/v1", body)
+        assert allowed is False
+        assert "POST" in error
+
+    def test_batch_delete_subrequest_blocked(self):
+        """Batch body with DELETE sub-request should be blocked."""
+        body = (
+            "--batch_abc\r\n"
+            "Content-Type: application/http\r\n"
+            "Content-ID: <item0>\r\n"
+            "\r\n"
+            "DELETE /gmail/v1/users/me/messages/abc123 HTTP/1.1\r\n"
+            "\r\n"
+            "--batch_abc--"
+        )
+        allowed, error = validate_gmail_endpoint("POST", "batch/gmail/v1", body)
+        assert allowed is False
+        assert "DELETE" in error
+
+    def test_batch_mixed_methods_blocked(self):
+        """If any sub-request is not GET, the whole batch is blocked."""
+        body = (
+            "--batch_abc\r\n"
+            "Content-Type: application/http\r\n"
+            "Content-ID: <item0>\r\n"
+            "\r\n"
+            "GET /gmail/v1/users/me/messages/abc123 HTTP/1.1\r\n"
+            "\r\n"
+            "--batch_abc\r\n"
+            "Content-Type: application/http\r\n"
+            "Content-ID: <item1>\r\n"
+            "\r\n"
+            "POST /gmail/v1/users/me/messages/send HTTP/1.1\r\n"
+            "\r\n"
+            "--batch_abc--"
+        )
+        allowed, error = validate_gmail_endpoint("POST", "batch/gmail/v1", body)
+        assert allowed is False
+        assert "POST" in error
+
+    def test_batch_empty_body_allowed(self):
+        """Empty body is allowed (no sub-requests to validate)."""
+        allowed, error = validate_gmail_endpoint("POST", "batch/gmail/v1", b"")
+        assert allowed is True
+        assert error == ""
+
+    def test_batch_bytes_body_validated(self):
+        """Body can be bytes (as received from Flask request.get_data())."""
+        body = (
+            b"--batch_abc\r\n"
+            b"Content-Type: application/http\r\n"
+            b"Content-ID: <item0>\r\n"
+            b"\r\n"
+            b"PUT /gmail/v1/users/me/settings/vacation HTTP/1.1\r\n"
+            b"\r\n"
+            b"--batch_abc--"
+        )
+        allowed, error = validate_gmail_endpoint("POST", "batch/gmail/v1", body)
+        assert allowed is False
+        assert "PUT" in error
+
+    # -- Dispatcher integration --
+
+    def test_batch_endpoint_via_gmail_service_dispatcher(self):
+        """validate_proxy_request should allow POST batch/gmail/v1 for gmail service."""
+        allowed, error = validate_proxy_request("gmail", "POST", "batch/gmail/v1")
+        assert allowed is True
+        assert error == ""
+
+    def test_batch_endpoint_via_gmail_work_service_dispatcher(self):
+        """Gmail variant services should also allow the batch endpoint."""
+        allowed, error = validate_proxy_request("gmail_work", "POST", "batch/gmail/v1")
+        assert allowed is True
+        assert error == ""
+
+    def test_batch_body_validated_via_dispatcher(self):
+        """Body validation works through the dispatcher."""
+        body = (
+            "--b\r\nContent-Type: application/http\r\n\r\nPOST /gmail/v1/users/me/messages/send HTTP/1.1\r\n\r\n--b--"
+        )
+        allowed, error = validate_proxy_request("gmail", "POST", "batch/gmail/v1", body)
+        assert allowed is False
+        assert "POST" in error
+
+
+# =============================================================================
 # Dispatcher: validate_proxy_request
 # =============================================================================
 

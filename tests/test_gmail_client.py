@@ -12,7 +12,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "skills" / "gmai
 
 from gmail_client import (
     AuthRequiredError,
+    _build_batch_body,
+    _parse_batch_response,
     api,
+    batch_get_messages,
+    batch_get_threads,
     create_draft,
     decode_body,
     extract_attachments,
@@ -40,6 +44,43 @@ def _mock_response(json_data, status_code=200, content=b"{}"):
     resp.raise_for_status.return_value = None
     resp.content = content
     return resp
+
+
+def _mock_batch_response(text, content_type):
+    """Build a mock response suitable for batch endpoint replies."""
+    resp = MagicMock()
+    resp.text = text
+    resp.headers = {"Content-Type": content_type}
+    resp.raise_for_status = MagicMock()
+    return resp
+
+
+def _make_batch_response_text(boundary: str, parts: list[dict]) -> str:
+    """Build a well-formed multipart/mixed batch response body.
+
+    Each item in ``parts`` must have:
+        - ``status``: HTTP status code (int)
+        - ``body``: JSON-serialisable dict to embed as the response body
+
+    Returns the full response text string (using \\r\\n line endings).
+    """
+    import json as _json
+
+    lines = []
+    for i, part in enumerate(parts):
+        status_code = part["status"]
+        body_json = _json.dumps(part["body"])
+        lines.append(f"--{boundary}\r\n")
+        lines.append("Content-Type: application/http\r\n")
+        lines.append(f"Content-ID: <response-item{i}>\r\n")
+        lines.append("\r\n")
+        lines.append(f"HTTP/1.1 {status_code} OK\r\n")
+        lines.append("Content-Type: application/json; charset=UTF-8\r\n")
+        lines.append("\r\n")
+        lines.append(body_json)
+        lines.append("\r\n")
+    lines.append(f"--{boundary}--")
+    return "".join(lines)
 
 
 def _b64(text: str) -> str:
@@ -528,33 +569,412 @@ class TestPaginate:
 
 
 # ---------------------------------------------------------------------------
+# _build_batch_body
+# ---------------------------------------------------------------------------
+
+
+class TestBuildBatchBody:
+    def test_single_path_format(self):
+        boundary = "testboundary"
+        body = _build_batch_body(["gmail/v1/users/me/messages/msg1"], boundary)
+
+        assert f"--{boundary}\r\n" in body
+        assert "Content-Type: application/http\r\n" in body
+        assert "Content-ID: <item0>\r\n" in body
+        assert "GET /gmail/v1/users/me/messages/msg1 HTTP/1.1\r\n" in body
+        assert f"--{boundary}--" in body
+
+    def test_multiple_paths_all_included(self):
+        boundary = "testboundary"
+        paths = [
+            "gmail/v1/users/me/messages/msg1?format=metadata",
+            "gmail/v1/users/me/messages/msg2?format=metadata",
+            "gmail/v1/users/me/messages/msg3?format=metadata",
+        ]
+        body = _build_batch_body(paths, boundary)
+
+        assert "Content-ID: <item0>\r\n" in body
+        assert "Content-ID: <item1>\r\n" in body
+        assert "Content-ID: <item2>\r\n" in body
+        assert "GET /gmail/v1/users/me/messages/msg1?format=metadata HTTP/1.1\r\n" in body
+        assert "GET /gmail/v1/users/me/messages/msg2?format=metadata HTTP/1.1\r\n" in body
+        assert "GET /gmail/v1/users/me/messages/msg3?format=metadata HTTP/1.1\r\n" in body
+
+    def test_boundary_used_as_delimiter(self):
+        boundary = "unique_boundary_xyz"
+        body = _build_batch_body(["gmail/v1/users/me/messages/msg1"], boundary)
+
+        # The body should use the given boundary string
+        assert f"--{boundary}\r\n" in body
+        assert f"--{boundary}--" in body
+
+    def test_each_part_has_correct_content_type(self):
+        boundary = "b"
+        body = _build_batch_body(
+            ["gmail/v1/users/me/messages/a", "gmail/v1/users/me/messages/b"],
+            boundary,
+        )
+        # Both parts should have the application/http content type
+        assert body.count("Content-Type: application/http\r\n") == 2
+
+    def test_empty_paths_produces_closing_boundary_only(self):
+        boundary = "b"
+        body = _build_batch_body([], boundary)
+        assert body == f"--{boundary}--"
+
+
+# ---------------------------------------------------------------------------
+# _parse_batch_response
+# ---------------------------------------------------------------------------
+
+
+class TestParseBatchResponse:
+    def test_parses_multiple_200_parts(self):
+        boundary = "batch_boundary"
+        text = _make_batch_response_text(
+            boundary,
+            [
+                {"status": 200, "body": {"id": "msg1", "snippet": "Hello"}},
+                {"status": 200, "body": {"id": "msg2", "snippet": "World"}},
+            ],
+        )
+        resp = _mock_batch_response(text, f"multipart/mixed; boundary={boundary}")
+        results = _parse_batch_response(resp)
+
+        assert len(results) == 2
+        assert results[0]["id"] == "msg1"
+        assert results[1]["id"] == "msg2"
+
+    def test_skips_non_200_parts(self):
+        boundary = "batch_boundary"
+        text = _make_batch_response_text(
+            boundary,
+            [
+                {"status": 200, "body": {"id": "msg1"}},
+                {"status": 404, "body": {"error": {"code": 404, "message": "Not Found"}}},
+                {"status": 200, "body": {"id": "msg3"}},
+            ],
+        )
+        resp = _mock_batch_response(text, f"multipart/mixed; boundary={boundary}")
+        results = _parse_batch_response(resp)
+
+        assert len(results) == 2
+        assert results[0]["id"] == "msg1"
+        assert results[1]["id"] == "msg3"
+
+    def test_empty_response_body_returns_empty_list(self):
+        boundary = "batch_boundary"
+        resp = _mock_batch_response("", f"multipart/mixed; boundary={boundary}")
+        results = _parse_batch_response(resp)
+        assert results == []
+
+    def test_missing_boundary_returns_empty_list(self):
+        resp = _mock_batch_response("some body text", "multipart/mixed")
+        results = _parse_batch_response(resp)
+        assert results == []
+
+    def test_boundary_extracted_from_content_type(self):
+        boundary = "my_special_boundary"
+        text = _make_batch_response_text(
+            boundary,
+            [{"status": 200, "body": {"id": "msg1"}}],
+        )
+        resp = _mock_batch_response(text, f"multipart/mixed; boundary={boundary}")
+        results = _parse_batch_response(resp)
+        assert len(results) == 1
+
+    def test_quoted_boundary_in_content_type(self):
+        boundary = "quoted_boundary"
+        text = _make_batch_response_text(
+            boundary,
+            [{"status": 200, "body": {"id": "msg1"}}],
+        )
+        # Boundary value is quoted in Content-Type
+        resp = _mock_batch_response(text, f'multipart/mixed; boundary="{boundary}"')
+        results = _parse_batch_response(resp)
+        assert len(results) == 1
+        assert results[0]["id"] == "msg1"
+
+    def test_single_200_part(self):
+        boundary = "b"
+        text = _make_batch_response_text(
+            boundary,
+            [{"status": 200, "body": {"id": "thread1", "messages": []}}],
+        )
+        resp = _mock_batch_response(text, f"multipart/mixed; boundary={boundary}")
+        results = _parse_batch_response(resp)
+        assert len(results) == 1
+        assert results[0]["id"] == "thread1"
+
+    def test_all_non_200_parts_returns_empty_list(self):
+        boundary = "b"
+        text = _make_batch_response_text(
+            boundary,
+            [
+                {"status": 403, "body": {"error": "Forbidden"}},
+                {"status": 404, "body": {"error": "Not Found"}},
+            ],
+        )
+        resp = _mock_batch_response(text, f"multipart/mixed; boundary={boundary}")
+        results = _parse_batch_response(resp)
+        assert results == []
+
+
+# ---------------------------------------------------------------------------
+# batch_get_messages
+# ---------------------------------------------------------------------------
+
+
+class TestBatchGetMessages:
+    @patch("gmail_client.requests.post")
+    def test_basic_batch_fetch(self, mock_post, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "https://p")
+
+        boundary = "test_boundary"
+        batch_text = _make_batch_response_text(
+            boundary,
+            [
+                {"status": 200, "body": {"id": "msg1", "snippet": "Hello"}},
+                {"status": 200, "body": {"id": "msg2", "snippet": "World"}},
+            ],
+        )
+        mock_post.return_value = _mock_batch_response(batch_text, f"multipart/mixed; boundary={boundary}")
+
+        results = batch_get_messages(["msg1", "msg2"])
+
+        assert len(results) == 2
+        assert results[0]["id"] == "msg1"
+        assert results[1]["id"] == "msg2"
+
+    @patch("gmail_client.requests.post")
+    def test_uses_batch_endpoint_url(self, mock_post, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "https://p")
+
+        boundary = "b"
+        batch_text = _make_batch_response_text(boundary, [])
+        mock_post.return_value = _mock_batch_response(batch_text, f"multipart/mixed; boundary={boundary}")
+
+        batch_get_messages(["msg1"])
+
+        call_url = mock_post.call_args[0][0]
+        assert call_url == "https://p/proxy/gmail/batch/gmail/v1"
+
+    @patch("gmail_client.requests.post")
+    def test_chunking_over_100_ids_makes_two_calls(self, mock_post, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "https://p")
+
+        boundary = "b"
+        # Return an empty batch response for each call
+        batch_text = _make_batch_response_text(boundary, [])
+        mock_post.return_value = _mock_batch_response(batch_text, f"multipart/mixed; boundary={boundary}")
+
+        # 101 IDs should split into two chunks (100 + 1)
+        message_ids = [f"msg{i}" for i in range(101)]
+        batch_get_messages(message_ids)
+
+        assert mock_post.call_count == 2
+
+    @patch("gmail_client.requests.post")
+    def test_exactly_100_ids_makes_one_call(self, mock_post, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "https://p")
+
+        boundary = "b"
+        batch_text = _make_batch_response_text(boundary, [])
+        mock_post.return_value = _mock_batch_response(batch_text, f"multipart/mixed; boundary={boundary}")
+
+        message_ids = [f"msg{i}" for i in range(100)]
+        batch_get_messages(message_ids)
+
+        assert mock_post.call_count == 1
+
+    @patch("gmail_client.requests.post")
+    def test_metadata_headers_included_in_request_path(self, mock_post, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "https://p")
+
+        boundary = "b"
+        batch_text = _make_batch_response_text(boundary, [])
+        mock_post.return_value = _mock_batch_response(batch_text, f"multipart/mixed; boundary={boundary}")
+
+        batch_get_messages(["msg1"], metadata_headers=["From", "Subject"])
+
+        # The POST body should contain the metadata headers as query params
+        call_data = mock_post.call_args[1]["data"]
+        assert "metadataHeaders=From" in call_data.decode("utf-8")
+        assert "metadataHeaders=Subject" in call_data.decode("utf-8")
+
+    @patch("gmail_client.requests.post")
+    def test_results_aggregated_across_chunks(self, mock_post, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "https://p")
+
+        boundary = "b"
+        chunk1_text = _make_batch_response_text(
+            boundary,
+            [{"status": 200, "body": {"id": f"msg{i}"}} for i in range(100)],
+        )
+        chunk2_text = _make_batch_response_text(
+            boundary,
+            [{"status": 200, "body": {"id": "msg100"}}],
+        )
+        mock_post.side_effect = [
+            _mock_batch_response(chunk1_text, f"multipart/mixed; boundary={boundary}"),
+            _mock_batch_response(chunk2_text, f"multipart/mixed; boundary={boundary}"),
+        ]
+
+        message_ids = [f"msg{i}" for i in range(101)]
+        results = batch_get_messages(message_ids)
+
+        assert len(results) == 101
+
+
+# ---------------------------------------------------------------------------
+# batch_get_threads
+# ---------------------------------------------------------------------------
+
+
+class TestBatchGetThreads:
+    @patch("gmail_client.requests.post")
+    def test_basic_batch_fetch(self, mock_post, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "https://p")
+
+        boundary = "test_boundary"
+        batch_text = _make_batch_response_text(
+            boundary,
+            [
+                {"status": 200, "body": {"id": "t1", "messages": []}},
+                {"status": 200, "body": {"id": "t2", "messages": []}},
+            ],
+        )
+        mock_post.return_value = _mock_batch_response(batch_text, f"multipart/mixed; boundary={boundary}")
+
+        results = batch_get_threads(["t1", "t2"])
+
+        assert len(results) == 2
+        assert results[0]["id"] == "t1"
+        assert results[1]["id"] == "t2"
+
+    @patch("gmail_client.requests.post")
+    def test_uses_batch_endpoint_url(self, mock_post, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "https://p")
+
+        boundary = "b"
+        batch_text = _make_batch_response_text(boundary, [])
+        mock_post.return_value = _mock_batch_response(batch_text, f"multipart/mixed; boundary={boundary}")
+
+        batch_get_threads(["t1"])
+
+        call_url = mock_post.call_args[0][0]
+        assert call_url == "https://p/proxy/gmail/batch/gmail/v1"
+
+    @patch("gmail_client.requests.post")
+    def test_chunking_over_100_ids_makes_two_calls(self, mock_post, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "https://p")
+
+        boundary = "b"
+        batch_text = _make_batch_response_text(boundary, [])
+        mock_post.return_value = _mock_batch_response(batch_text, f"multipart/mixed; boundary={boundary}")
+
+        thread_ids = [f"t{i}" for i in range(101)]
+        batch_get_threads(thread_ids)
+
+        assert mock_post.call_count == 2
+
+    @patch("gmail_client.requests.post")
+    def test_thread_paths_used_not_message_paths(self, mock_post, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "https://p")
+
+        boundary = "b"
+        batch_text = _make_batch_response_text(boundary, [])
+        mock_post.return_value = _mock_batch_response(batch_text, f"multipart/mixed; boundary={boundary}")
+
+        batch_get_threads(["t1"])
+
+        call_data = mock_post.call_args[1]["data"].decode("utf-8")
+        assert "threads/t1" in call_data
+        assert "messages/t1" not in call_data
+
+    @patch("gmail_client.requests.post")
+    def test_metadata_headers_included_in_request_path(self, mock_post, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "https://p")
+
+        boundary = "b"
+        batch_text = _make_batch_response_text(boundary, [])
+        mock_post.return_value = _mock_batch_response(batch_text, f"multipart/mixed; boundary={boundary}")
+
+        batch_get_threads(["t1"], metadata_headers=["From", "Subject"])
+
+        call_data = mock_post.call_args[1]["data"].decode("utf-8")
+        assert "metadataHeaders=From" in call_data
+        assert "metadataHeaders=Subject" in call_data
+
+    @patch("gmail_client.requests.post")
+    def test_skips_non_200_thread_responses(self, mock_post, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "https://p")
+
+        boundary = "b"
+        batch_text = _make_batch_response_text(
+            boundary,
+            [
+                {"status": 200, "body": {"id": "t1", "messages": []}},
+                {"status": 404, "body": {"error": "Not Found"}},
+            ],
+        )
+        mock_post.return_value = _mock_batch_response(batch_text, f"multipart/mixed; boundary={boundary}")
+
+        results = batch_get_threads(["t1", "t2"])
+
+        assert len(results) == 1
+        assert results[0]["id"] == "t1"
+
+
+# ---------------------------------------------------------------------------
 # search
 # ---------------------------------------------------------------------------
 
 
 class TestSearch:
+    @patch("gmail_client.requests.post")
     @patch("gmail_client.requests.get")
-    def test_search_returns_enriched_messages(self, mock_get, monkeypatch):
+    def test_search_returns_enriched_messages(self, mock_get, mock_post, monkeypatch):
         monkeypatch.setenv("SESSION_ID", "s")
         monkeypatch.setenv("PROXY_URL", "https://p")
 
-        # First call: list messages; second call: get metadata
-        mock_get.side_effect = [
-            _mock_response({"messages": [{"id": "msg1", "threadId": "t1"}]}),
-            _mock_response(
+        # First call (GET): list message stubs
+        mock_get.return_value = _mock_response({"messages": [{"id": "msg1", "threadId": "t1"}]})
+
+        # Second call (POST): batch fetch full metadata
+        boundary = "b"
+        batch_text = _make_batch_response_text(
+            boundary,
+            [
                 {
-                    "id": "msg1",
-                    "threadId": "t1",
-                    "snippet": "Preview text",
-                    "payload": {
-                        "headers": [
-                            {"name": "From", "value": "alice@example.com"},
-                            {"name": "Subject", "value": "Hello"},
-                        ]
+                    "status": 200,
+                    "body": {
+                        "id": "msg1",
+                        "threadId": "t1",
+                        "snippet": "Preview text",
+                        "payload": {
+                            "headers": [
+                                {"name": "From", "value": "alice@example.com"},
+                                {"name": "Subject", "value": "Hello"},
+                            ]
+                        },
                     },
                 }
-            ),
-        ]
+            ],
+        )
+        mock_post.return_value = _mock_batch_response(batch_text, f"multipart/mixed; boundary={boundary}")
 
         results = search("from:alice", max_results=1)
 
@@ -573,8 +993,9 @@ class TestSearch:
 
         assert results == []
 
+    @patch("gmail_client.requests.post")
     @patch("gmail_client.requests.get")
-    def test_search_caps_max_results(self, mock_get, monkeypatch):
+    def test_search_caps_max_results(self, mock_get, mock_post, monkeypatch):
         monkeypatch.setenv("SESSION_ID", "s")
         monkeypatch.setenv("PROXY_URL", "https://p")
         mock_get.return_value = _mock_response({})
@@ -583,6 +1004,71 @@ class TestSearch:
 
         call_params = mock_get.call_args[1]["params"]
         assert call_params["maxResults"] == 500
+
+    @patch("gmail_client.requests.post")
+    @patch("gmail_client.requests.get")
+    def test_search_result_shape(self, mock_get, mock_post, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "https://p")
+
+        mock_get.return_value = _mock_response({"messages": [{"id": "msg1", "threadId": "t1"}]})
+
+        boundary = "b"
+        batch_text = _make_batch_response_text(
+            boundary,
+            [
+                {
+                    "status": 200,
+                    "body": {
+                        "id": "msg1",
+                        "threadId": "t1",
+                        "snippet": "A snippet",
+                        "payload": {
+                            "headers": [
+                                {"name": "From", "value": "sender@example.com"},
+                                {"name": "To", "value": "me@example.com"},
+                                {"name": "Subject", "value": "Test subject"},
+                                {"name": "Date", "value": "Mon, 20 Feb 2026 10:00:00 +0000"},
+                            ]
+                        },
+                    },
+                }
+            ],
+        )
+        mock_post.return_value = _mock_batch_response(batch_text, f"multipart/mixed; boundary={boundary}")
+
+        results = search("test")
+
+        assert len(results) == 1
+        msg = results[0]
+        assert "id" in msg
+        assert "threadId" in msg
+        assert "headers" in msg
+        assert "snippet" in msg
+        assert msg["headers"]["From"] == "sender@example.com"
+
+    @patch("gmail_client.requests.post")
+    @patch("gmail_client.requests.get")
+    def test_search_uses_batch_post_for_enrichment(self, mock_get, mock_post, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "https://p")
+
+        mock_get.return_value = _mock_response({"messages": [{"id": "msg1"}]})
+
+        boundary = "b"
+        batch_text = _make_batch_response_text(
+            boundary,
+            [{"status": 200, "body": {"id": "msg1", "threadId": "t1", "snippet": "", "payload": {"headers": []}}}],
+        )
+        mock_post.return_value = _mock_batch_response(batch_text, f"multipart/mixed; boundary={boundary}")
+
+        search("test")
+
+        # GET is used for the list call; POST is used for batch enrichment
+        mock_get.assert_called_once()
+        mock_post.assert_called_once()
+        batch_url = mock_post.call_args[0][0]
+        assert "batch/gmail/v1" in batch_url
 
 
 # ---------------------------------------------------------------------------
@@ -813,16 +1299,23 @@ class TestGetProfile:
 class TestSearchThreads:
     """Tests for search_threads helper."""
 
+    @patch("gmail_client.requests.post")
     @patch("gmail_client.requests.get")
-    def test_returns_threads(self, mock_get, monkeypatch):
+    def test_returns_threads(self, mock_get, mock_post, monkeypatch):
         monkeypatch.setenv("SESSION_ID", "s")
         monkeypatch.setenv("PROXY_URL", "http://proxy")
-        # First call: threads.list returns stubs
-        list_resp = _mock_response({"threads": [{"id": "t1"}, {"id": "t2"}]})
-        # Second and third calls: threads.get returns full thread objects
-        thread1_resp = _mock_response({"id": "t1", "messages": [{"id": "m1"}]})
-        thread2_resp = _mock_response({"id": "t2", "messages": [{"id": "m2"}]})
-        mock_get.side_effect = [list_resp, thread1_resp, thread2_resp]
+        # First call (GET): threads.list returns stubs
+        mock_get.return_value = _mock_response({"threads": [{"id": "t1"}, {"id": "t2"}]})
+        # Second call (POST): batch fetch returns full thread objects
+        boundary = "b"
+        batch_text = _make_batch_response_text(
+            boundary,
+            [
+                {"status": 200, "body": {"id": "t1", "messages": [{"id": "m1"}]}},
+                {"status": 200, "body": {"id": "t2", "messages": [{"id": "m2"}]}},
+            ],
+        )
+        mock_post.return_value = _mock_batch_response(batch_text, f"multipart/mixed; boundary={boundary}")
 
         result = search_threads("from:user@example.com")
 
@@ -841,10 +1334,12 @@ class TestSearchThreads:
 
         assert result == []
 
+    @patch("gmail_client.requests.post")
     @patch("gmail_client.requests.get")
-    def test_passes_query_and_max_results(self, mock_get, monkeypatch):
+    def test_passes_query_and_max_results(self, mock_get, mock_post, monkeypatch):
         monkeypatch.setenv("SESSION_ID", "s")
         monkeypatch.setenv("PROXY_URL", "http://proxy")
+        # Return no stubs so we don't need a batch response
         mock_get.return_value = _mock_response({})
 
         search_threads("label:inbox", max_results=5)
@@ -853,8 +1348,9 @@ class TestSearchThreads:
         assert call_params["q"] == "label:inbox"
         assert call_params["maxResults"] == 5
 
+    @patch("gmail_client.requests.post")
     @patch("gmail_client.requests.get")
-    def test_omits_query_when_empty(self, mock_get, monkeypatch):
+    def test_omits_query_when_empty(self, mock_get, mock_post, monkeypatch):
         monkeypatch.setenv("SESSION_ID", "s")
         monkeypatch.setenv("PROXY_URL", "http://proxy")
         mock_get.return_value = _mock_response({})
@@ -864,6 +1360,29 @@ class TestSearchThreads:
         call_params = mock_get.call_args[1]["params"]
         assert "q" not in call_params
         assert call_params["maxResults"] == 10
+
+    @patch("gmail_client.requests.post")
+    @patch("gmail_client.requests.get")
+    def test_uses_batch_post_for_thread_fetch(self, mock_get, mock_post, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "s")
+        monkeypatch.setenv("PROXY_URL", "http://proxy")
+
+        mock_get.return_value = _mock_response({"threads": [{"id": "t1"}]})
+
+        boundary = "b"
+        batch_text = _make_batch_response_text(
+            boundary,
+            [{"status": 200, "body": {"id": "t1", "messages": []}}],
+        )
+        mock_post.return_value = _mock_batch_response(batch_text, f"multipart/mixed; boundary={boundary}")
+
+        search_threads("test")
+
+        # GET for list; POST for batch fetch
+        mock_get.assert_called_once()
+        mock_post.assert_called_once()
+        batch_url = mock_post.call_args[0][0]
+        assert "batch/gmail/v1" in batch_url
 
 
 # ---------------------------------------------------------------------------
