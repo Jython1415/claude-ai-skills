@@ -14,11 +14,9 @@ import os
 import sys
 from collections.abc import Callable
 from functools import wraps
-from pathlib import Path
 from typing import Any
 
 import httpx
-import services as services_mod  # noqa: E402 - local module in same directory
 import uvicorn
 from fastmcp import Context, FastMCP
 from fastmcp.server.auth.providers.github import GitHubProvider
@@ -318,130 +316,6 @@ async def report_skill_issue(
         logger.error(f"MCP tool error: {e}")
         # Return generic error to client (don't expose exception details)
         return {"error": "Operation failed", "details": "An unexpected error occurred. Check server logs."}
-
-
-# --- Service management tools ---
-
-# Resolve project directory (parent of mcp/)
-_PROJECT_DIR = Path(os.path.dirname(__file__)).parent
-
-
-@mcp.tool()
-@require_allowlist
-async def service_status(context: Context, service: str | None = None) -> dict:
-    """
-    Check the status of LaunchAgent-managed services.
-
-    Shows whether each service is running, its PID, and recent log output.
-
-    Args:
-        service: Service name ("proxy", "mcp", "tunnel") or None for all.
-
-    Returns:
-        Dictionary with "status" text (markdown-formatted) or "error".
-    """
-    services_info = services_mod.discover_services()
-
-    if not services_info:
-        return {"status": "No claude-ai-skills services found. Run service_setup() to install them."}
-
-    if service:
-        if service not in services_info:
-            known = ", ".join(sorted(services_info.keys()))
-            return {"error": f"Unknown service '{service}'. Available: {known}"}
-        info = services_info[service]
-        return {"status": services_mod.get_service_status_text(service, info)}
-
-    # All services
-    blocks = []
-    for name in sorted(services_info.keys()):
-        blocks.append(services_mod.get_service_status_text(name, services_info[name]))
-    return {"status": "\n\n".join(blocks)}
-
-
-@mcp.tool()
-@require_allowlist
-async def service_control(context: Context, service: str, action: str) -> dict:
-    """
-    Start, stop, or restart a LaunchAgent-managed service.
-
-    Args:
-        service: Service name ("proxy", "mcp", "tunnel").
-        action: One of "start", "stop", "restart".
-
-    Returns:
-        Dictionary with "result" message or "error".
-        If restarting the MCP service, includes a "warning" about connection loss.
-    """
-    valid_actions = ("start", "stop", "restart")
-    if action not in valid_actions:
-        return {"error": f"Invalid action '{action}'. Must be one of: {', '.join(valid_actions)}"}
-
-    services_info = services_mod.discover_services()
-    if service not in services_info:
-        known = ", ".join(sorted(services_info.keys()))
-        return {"error": f"Unknown service '{service}'. Available: {known}"}
-
-    label = services_info[service]["label"]
-    result = {}
-
-    # Warn about MCP self-management
-    if service == "mcp" and action in ("stop", "restart"):
-        result["warning"] = (
-            "This will stop the MCP server. Your connection will drop. "
-            "The service will restart automatically (KeepAlive is enabled)."
-        )
-
-    if action == "restart":
-        result["result"] = services_mod.restart_service(label)
-    else:
-        result["result"] = services_mod.run_launchctl(action, label)
-
-    return result
-
-
-@mcp.tool()
-@require_allowlist
-async def service_logs(context: Context, service: str, lines: int = 20) -> dict:
-    """
-    Read recent log output from a service.
-
-    Args:
-        service: Service name ("proxy", "mcp", "tunnel").
-        lines: Number of recent lines to return (default: 20, max: 200).
-
-    Returns:
-        Dictionary with "stdout" and "stderr" log content, or "error".
-    """
-    if lines < 1 or lines > 200:
-        return {"error": "lines must be between 1 and 200"}
-
-    services_info = services_mod.discover_services()
-    if service not in services_info:
-        known = ", ".join(sorted(services_info.keys()))
-        return {"error": f"Unknown service '{service}'. Available: {known}"}
-
-    label = services_info[service]["label"]
-    return services_mod.get_logs(label, lines)
-
-
-@mcp.tool()
-@require_allowlist
-async def service_setup(context: Context) -> dict:
-    """
-    Run the setup-launchagents.sh script to install/restart all services.
-
-    This syncs dependencies, validates configuration, generates LaunchAgent
-    plists, and loads them. It handles both fresh installs and restarts.
-    Equivalent to running ./scripts/setup-launchagents.sh manually.
-
-    WARNING: This will restart the MCP server. Your connection will drop
-    temporarily. The server will come back up automatically.
-
-    Returns:
-        Dictionary with "success" bool, "stdout", and "stderr" from the script.
-    """
-    return services_mod.run_setup_script(_PROJECT_DIR)
 
 
 if __name__ == "__main__":
