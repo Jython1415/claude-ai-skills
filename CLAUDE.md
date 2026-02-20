@@ -157,6 +157,13 @@ at session start:
 ### Local Server Requirement
 The MCP server must run locally on the user's machine, not on cloud infrastructure like Cloudflare Workers. This is a non-negotiable requirement for the credential proxy architecture - credentials must stay on the local machine.
 
+### Local vs Remote MCP Tool Placement
+Tools that manage local infrastructure (launchctl, log reading, setup scripts) belong on
+the **local stdio MCP server** (`local_server.py` via `.mcp.json`), NOT on the remote MCP
+server. The remote server requires itself to be running — putting management tools there
+creates a chicken-and-egg problem. The local server is launched by Claude Code as a
+subprocess, runs outside the sandbox, and has no dependency on remote infrastructure.
+
 ## Service Configuration
 
 Each service in `credentials.json` specifies:
