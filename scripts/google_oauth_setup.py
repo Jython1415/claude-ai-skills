@@ -265,6 +265,8 @@ def print_usage():
 
 Usage:
     python google_oauth_setup.py              Interactive setup (add new account)
+    python google_oauth_setup.py --refresh    Re-authorize a service (interactive)
+    python google_oauth_setup.py --refresh <name>
     python google_oauth_setup.py --rename     Rename a service (interactive)
     python google_oauth_setup.py --rename <old> <new>
     python google_oauth_setup.py --remove     Remove a service (interactive)
@@ -444,6 +446,56 @@ def remove_service():
     print(f"Removed '{target}'.")
 
 
+def refresh_service():
+    """Re-authorize an existing OAuth2 service to get a new refresh token."""
+    creds_file, credentials = _load_credentials()
+    services = _list_oauth2_services(credentials)
+
+    if not services:
+        print("No Google/OAuth2 services found.")
+        return
+
+    print("Current Google services:")
+    for i, name in enumerate(services, 1):
+        print(f"  {i}. {name}")
+
+    if len(sys.argv) >= 3:
+        target = sys.argv[2]
+    else:
+        target = get_input("\nEnter service name to refresh: ")
+
+    if target not in credentials:
+        print(f"Error: Service '{target}' not found.")
+        sys.exit(1)
+
+    entry = credentials[target]
+    client_id = entry.get("client_id")
+    client_secret = entry.get("client_secret")
+
+    if not client_id or not client_secret:
+        print(f"Error: Service '{target}' is missing client_id or client_secret.")
+        sys.exit(1)
+
+    # Infer scopes from service name
+    service_type = determine_service_type(target, [])
+    scopes = SCOPE_MAPPINGS.get(service_type, SCOPE_MAPPINGS["gmail"])
+
+    print(f"\nRefreshing '{target}' with scopes: {', '.join(scopes)}")
+    print(f"Using stored client credentials.")
+
+    port_input = get_input("Enter callback port (default: 8080): ", required=False)
+    port = int(port_input) if port_input else 8080
+
+    refresh_token = start_oauth_flow(client_id, client_secret, scopes, port)
+    if not refresh_token:
+        print("\nOAuth flow failed. Please try again.")
+        sys.exit(1)
+
+    entry["refresh_token"] = refresh_token
+    _save_credentials(creds_file, credentials)
+    print(f"\nRefresh token updated for '{target}'.")
+
+
 def main():
     """Main entry point."""
     if len(sys.argv) >= 2:
@@ -451,6 +503,8 @@ def main():
             return rename_service()
         elif sys.argv[1] == "--remove":
             return remove_service()
+        elif sys.argv[1] == "--refresh":
+            return refresh_service()
         elif sys.argv[1] in ("--help", "-h"):
             print_usage()
             return
@@ -480,8 +534,30 @@ You can do this at: https://console.cloud.google.com/apis/credentials
     print("Step 1: Enter Google Cloud OAuth credentials")
     print("-" * 60)
 
-    client_id = get_input("\nEnter client_id: ")
-    client_secret = get_input("Enter client_secret: ")
+    client_id = None
+    client_secret = None
+
+    # Check for existing OAuth2 credentials to reuse
+    creds_file = Path(__file__).parent.parent / "server" / "credentials.json"
+    if creds_file.exists():
+        try:
+            with open(creds_file) as f:
+                existing = json.load(f)
+            for name, config in existing.items():
+                if isinstance(config, dict) and config.get("client_id") and config.get("client_secret"):
+                    print(f"\nFound existing client credentials (from '{name}').")
+                    reuse = get_input("Reuse these credentials? (yes/no): ", required=False) or "yes"
+                    if reuse.lower() in ("yes", "y"):
+                        client_id = config["client_id"]
+                        client_secret = config["client_secret"]
+                        print("Using existing client credentials.")
+                    break
+        except (json.JSONDecodeError, Exception):
+            pass
+
+    if not client_id:
+        client_id = get_input("\nEnter client_id: ")
+        client_secret = get_input("Enter client_secret: ")
 
     # Select scopes
     print("\n" + "-" * 60)
