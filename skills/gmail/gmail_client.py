@@ -769,4 +769,4 @@ def search_threads(query: str = "", max_results: int = 10) -> list[dict]:
     thread_stubs = data.get("threads", [])
 
     thread_ids = [stub["id"] for stub in thread_stubs]
-    return batch_get_threads(thread_ids)
+    return batch_get_threads(thread_ids, format="full")

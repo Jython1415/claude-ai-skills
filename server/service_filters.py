@@ -19,6 +19,9 @@ _GMAIL_PATH_PREFIX = re.compile(r"^gmail/v1/users/[^/]+/")
 # Known Gmail resource types (first segment after userId)
 _GMAIL_KNOWN_RESOURCES = frozenset({"messages", "threads", "drafts", "labels", "profile", "history", "settings"})
 
+# Matches HTTP request lines in batch sub-requests (e.g. "GET /gmail/v1/... HTTP/1.1")
+_BATCH_HTTP_LINE = re.compile(r"^([A-Z]+)\s+/\S+\s+HTTP/\d+\.\d+\s*$", re.MULTILINE)
+
 
 def _parse_gmail_segments(path: str) -> list[str] | None:
     """
@@ -36,7 +39,31 @@ def _parse_gmail_segments(path: str) -> list[str] | None:
     return [s for s in rest.split("/") if s]
 
 
-def validate_gmail_endpoint(method: str, path: str) -> tuple[bool, str]:
+def _validate_batch_body(body: bytes | str | None) -> tuple[bool, str]:
+    """
+    Validate that a Gmail batch request body only contains GET sub-requests.
+
+    The batch endpoint (POST /batch/gmail/v1) embeds individual HTTP requests
+    in a multipart/mixed body.  Without this check, a crafted batch request
+    could embed POST /messages/send or DELETE operations, bypassing the
+    proxy's endpoint filters.
+
+    Args:
+        body: The raw request body.
+
+    Returns:
+        Tuple of (is_allowed, error_message).
+    """
+    if not body:
+        return True, ""
+    text = body.decode("utf-8", errors="replace") if isinstance(body, bytes) else body
+    for match in _BATCH_HTTP_LINE.finditer(text):
+        if match.group(1) != "GET":
+            return False, f"Batch sub-request uses blocked method: {match.group(1)}"
+    return True, ""
+
+
+def validate_gmail_endpoint(method: str, path: str, body: bytes | str | None = None) -> tuple[bool, str]:
     """
     Validate a Gmail API request against the proxy's endpoint policy.
 
@@ -53,8 +80,9 @@ def validate_gmail_endpoint(method: str, path: str) -> tuple[bool, str]:
     method = method.upper()
 
     # Allow batch endpoint (POST batch/gmail/v1) — used by batch_get_messages/threads
+    # Validate that all embedded sub-requests are GET-only to prevent filter bypass
     if method == "POST" and path == "batch/gmail/v1":
-        return True, ""
+        return _validate_batch_body(body)
 
     segments = _parse_gmail_segments(path)
 
@@ -131,7 +159,7 @@ def validate_gmail_endpoint(method: str, path: str) -> tuple[bool, str]:
     return False, f"Endpoint not in allowlist: {method} {path}"
 
 
-def validate_proxy_request(service: str, method: str, path: str) -> tuple[bool, str]:
+def validate_proxy_request(service: str, method: str, path: str, body: bytes | str | None = None) -> tuple[bool, str]:
     """
     Dispatcher: check if a service has endpoint filtering, and apply it.
 
@@ -141,12 +169,13 @@ def validate_proxy_request(service: str, method: str, path: str) -> tuple[bool, 
         service: Service name (e.g. "gmail", "bsky", "gmail_work")
         method: HTTP method
         path: The path after /proxy/<service>/
+        body: Optional request body (used for batch endpoint validation)
 
     Returns:
         Tuple of (is_allowed, error_message). error_message is empty when allowed.
     """
     if service == "gmail" or service.startswith("gmail_"):
-        return validate_gmail_endpoint(method, path)
+        return validate_gmail_endpoint(method, path, body)
 
     # No filter for this service — allow through
     return True, ""

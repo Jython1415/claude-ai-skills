@@ -354,7 +354,7 @@ def proxy_request(service: str, rest: str):
         return jsonify({"error": f"session does not have access to {service}"}), 403
 
     # Check service-specific endpoint filters (e.g., Gmail send blocking)
-    allowed, filter_error = validate_proxy_request(service, request.method, rest)
+    allowed, filter_error = validate_proxy_request(service, request.method, rest, request.get_data())
     if not allowed:
         logger.warning(f"Proxy filter blocked: {request.method} {service}/{rest} - {filter_error}")
         audit_log.proxy_request(
