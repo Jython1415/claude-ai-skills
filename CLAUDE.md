@@ -127,6 +127,24 @@ the Flask API. The setup script validates this key is set before starting servic
 Known services (`bsky`, `github_api`, `gmail`, `gcal`, `gdrive`) have hardcoded base URLs and auth types
 in `credentials.py`. Custom services need explicit `base_url` and `type` fields.
 
+## Testing MCP Tools
+
+`@mcp.tool()` wraps functions into `FunctionTool` objects that aren't directly callable.
+To unit-test tool logic, split implementation from the decorator:
+
+```python
+def _my_tool_impl(arg: str) -> str:
+    """Testable implementation."""
+    ...
+
+@mcp.tool()
+def my_tool(arg: str) -> str:
+    """MCP tool wrapper."""
+    return _my_tool_impl(arg)
+```
+
+Tests import and call `_my_tool_impl` directly. See `tests/test_local_server.py` for examples.
+
 ## Dependencies
 
 Managed via `pyproject.toml` and uv:
