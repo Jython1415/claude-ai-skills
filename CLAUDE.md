@@ -31,7 +31,8 @@ Claude.ai
 - `credentials.json` - Your API credentials (gitignored)
 
 ### MCP Server (`mcp/`)
-- `server.py` - FastMCP server with `create_session`, `revoke_session`, `list_services`, `report_skill_issue`
+- `mcp_server.py` - FastMCP server with `create_session`, `revoke_session`, `list_services`, `report_skill_issue`, `service_status`, `service_control`, `service_logs`, `service_setup`
+- `services.py` - LaunchAgent service management (discover, start/stop/restart, logs, setup script)
 - Runs on port 10000 with Streamable HTTP transport via Cloudflare Tunnel
 - Uses GitHub OAuth with username allowlist (set `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_ALLOWED_USERS` env vars)
 - No custom middleware needed -- uses default FastMCP directly
