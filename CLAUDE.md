@@ -182,6 +182,7 @@ Managed via `pyproject.toml` and uv:
 - **Service Isolation**: Sessions grant access to specific services only
 - **Transport Security**: Cloudflare Tunnel provides encrypted HTTPS tunnel
 - **Audit Logging**: All session lifecycle events, proxy requests, and git operations logged to `~/Library/Logs/claude-ai-skills-audit.jsonl`
+- **Batch Endpoint Body Validation**: Endpoints that accept multipart batch bodies (e.g., `POST batch/gmail/v1`) must validate embedded sub-requests against the same filters as individual requests. The proxy only inspects the outer HTTP method and path — the body is forwarded as-is. Without body validation, a crafted batch request can embed `POST /messages/send` or `DELETE` operations that bypass endpoint filters. Currently enforced by restricting batch sub-requests to GET-only.
 
 ## Environment Setup
 
