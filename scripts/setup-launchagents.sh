@@ -24,14 +24,14 @@
 #   launchctl list | grep joshuashew
 #
 # To manually stop/start:
-#   launchctl stop com.joshuashew.credential-proxy
-#   launchctl start com.joshuashew.credential-proxy
+#   launchctl stop com.joshuashew.claude-ai-skills.proxy
+#   launchctl start com.joshuashew.claude-ai-skills.proxy
 #
 # To uninstall:
-#   launchctl unload ~/Library/LaunchAgents/com.joshuashew.credential-proxy.plist
-#   launchctl unload ~/Library/LaunchAgents/com.joshuashew.mcp-server.plist
-#   rm ~/Library/LaunchAgents/com.joshuashew.credential-proxy.plist
-#   rm ~/Library/LaunchAgents/com.joshuashew.mcp-server.plist
+#   launchctl unload ~/Library/LaunchAgents/com.joshuashew.claude-ai-skills.proxy.plist
+#   launchctl unload ~/Library/LaunchAgents/com.joshuashew.claude-ai-skills.mcp.plist
+#   rm ~/Library/LaunchAgents/com.joshuashew.claude-ai-skills.proxy.plist
+#   rm ~/Library/LaunchAgents/com.joshuashew.claude-ai-skills.mcp.plist
 #   sudo cloudflared service uninstall  # (for the tunnel)
 
 set -e
@@ -61,7 +61,7 @@ echo "uv binary: $UV_BIN"
 echo ""
 
 # Check if this is a restart or fresh install
-if launchctl list 2>/dev/null | grep -q "com.joshuashew.credential-proxy"; then
+if launchctl list 2>/dev/null | grep -q "com.joshuashew.claude-ai-skills"; then
     echo "Note: Existing servers detected - will restart them"
     echo ""
 fi
@@ -116,8 +116,8 @@ echo "----------------------------------------"
 echo "Setting up Flask Proxy Server (port $PROXY_PORT)"
 echo "----------------------------------------"
 
-PROXY_PLIST="$LAUNCH_AGENTS_DIR/com.joshuashew.credential-proxy.plist"
-PROXY_LABEL="com.joshuashew.credential-proxy"
+PROXY_PLIST="$LAUNCH_AGENTS_DIR/com.joshuashew.claude-ai-skills.proxy.plist"
+PROXY_LABEL="com.joshuashew.claude-ai-skills.proxy"
 
 # Unload existing if present (handles both restart and fresh install)
 if launchctl list 2>/dev/null | grep -q "$PROXY_LABEL"; then
@@ -126,14 +126,19 @@ if launchctl list 2>/dev/null | grep -q "$PROXY_LABEL"; then
     sleep 1  # Give it time to stop
 fi
 
-# Also unload old gitproxy if present
-OLD_PROXY_LABEL="com.joshuashew.gitproxy"
-OLD_PROXY_PLIST="$LAUNCH_AGENTS_DIR/com.joshuashew.gitproxy.plist"
-if launchctl list 2>/dev/null | grep -q "$OLD_PROXY_LABEL"; then
-    echo "Removing old gitproxy LaunchAgent..."
-    launchctl unload "$OLD_PROXY_PLIST" 2>/dev/null || true
-    rm -f "$OLD_PROXY_PLIST"
-fi
+# Clean up legacy LaunchAgents from previous naming schemes
+for OLD_LABEL_INFO in \
+    "com.joshuashew.gitproxy" \
+    "com.joshuashew.credential-proxy" \
+    "com.joshuashew.mcp-server" \
+    "com.joshuashew.cloudflare-tunnel"; do
+    OLD_PLIST="$LAUNCH_AGENTS_DIR/${OLD_LABEL_INFO}.plist"
+    if launchctl list 2>/dev/null | grep -q "$OLD_LABEL_INFO"; then
+        echo "Removing old LaunchAgent: $OLD_LABEL_INFO..."
+        launchctl unload "$OLD_PLIST" 2>/dev/null || true
+    fi
+    rm -f "$OLD_PLIST"
+done
 
 echo "Creating $PROXY_PLIST..."
 cat > "$PROXY_PLIST" << EOF
@@ -163,10 +168,10 @@ cat > "$PROXY_PLIST" << EOF
     <true/>
 
     <key>StandardOutPath</key>
-    <string>$LOGS_DIR/com.joshuashew.credential-proxy.log</string>
+    <string>$LOGS_DIR/com.joshuashew.claude-ai-skills.proxy.log</string>
 
     <key>StandardErrorPath</key>
-    <string>$LOGS_DIR/com.joshuashew.credential-proxy.error.log</string>
+    <string>$LOGS_DIR/com.joshuashew.claude-ai-skills.proxy.error.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -189,8 +194,8 @@ echo "----------------------------------------"
 echo "Setting up MCP Server (port $MCP_PORT)"
 echo "----------------------------------------"
 
-MCP_PLIST="$LAUNCH_AGENTS_DIR/com.joshuashew.mcp-server.plist"
-MCP_LABEL="com.joshuashew.mcp-server"
+MCP_PLIST="$LAUNCH_AGENTS_DIR/com.joshuashew.claude-ai-skills.mcp.plist"
+MCP_LABEL="com.joshuashew.claude-ai-skills.mcp"
 
 # Unload existing if present (handles both restart and fresh install)
 if launchctl list 2>/dev/null | grep -q "$MCP_LABEL"; then
@@ -227,10 +232,10 @@ cat > "$MCP_PLIST" << EOF
     <true/>
 
     <key>StandardOutPath</key>
-    <string>$LOGS_DIR/com.joshuashew.mcp-server.log</string>
+    <string>$LOGS_DIR/com.joshuashew.claude-ai-skills.mcp.log</string>
 
     <key>StandardErrorPath</key>
-    <string>$LOGS_DIR/com.joshuashew.mcp-server.error.log</string>
+    <string>$LOGS_DIR/com.joshuashew.claude-ai-skills.mcp.error.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -265,8 +270,8 @@ echo "----------------------------------------"
 echo "Checking Cloudflare Tunnel"
 echo "----------------------------------------"
 
-TUNNEL_LABEL="com.joshuashew.cloudflare-tunnel"
-TUNNEL_PLIST="$LAUNCH_AGENTS_DIR/com.joshuashew.cloudflare-tunnel.plist"
+TUNNEL_LABEL="com.joshuashew.claude-ai-skills.tunnel"
+TUNNEL_PLIST="$LAUNCH_AGENTS_DIR/com.joshuashew.claude-ai-skills.tunnel.plist"
 SYSTEM_TUNNEL_PLIST="/Library/LaunchDaemons/com.cloudflare.cloudflared.plist"
 
 if [ -f "$SYSTEM_TUNNEL_PLIST" ]; then
@@ -308,9 +313,9 @@ echo "  $SYSTEM_TUNNEL_PLIST (system daemon)"
 fi
 echo ""
 echo "Logs:"
-echo "  tail -f ~/Library/Logs/com.joshuashew.credential-proxy.log"
-echo "  tail -f ~/Library/Logs/com.joshuashew.mcp-server.log"
-echo "  tail -f ~/Library/Logs/com.joshuashew.cloudflare-tunnel.log"
+echo "  tail -f ~/Library/Logs/com.joshuashew.claude-ai-skills.proxy.log"
+echo "  tail -f ~/Library/Logs/com.joshuashew.claude-ai-skills.mcp.log"
+echo "  tail -f ~/Library/Logs/com.joshuashew.claude-ai-skills.tunnel.log"
 echo ""
 echo "Claude.ai Custom Connector:"
 echo "  Name: Credential Proxy"

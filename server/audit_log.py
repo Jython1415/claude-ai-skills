@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_LOG_PATH = os.path.expanduser("~/Library/Logs/credential-proxy-audit.jsonl")
+DEFAULT_LOG_PATH = os.path.expanduser("~/Library/Logs/claude-ai-skills-audit.jsonl")
 
 
 class AuditLog:

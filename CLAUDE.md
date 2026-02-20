@@ -139,7 +139,7 @@ Managed via `pyproject.toml` and uv:
 - **Session Management**: Sessions expire automatically (default 30 min)
 - **Service Isolation**: Sessions grant access to specific services only
 - **Transport Security**: Cloudflare Tunnel provides encrypted HTTPS tunnel
-- **Audit Logging**: All session lifecycle events, proxy requests, and git operations logged to `~/Library/Logs/credential-proxy-audit.jsonl`
+- **Audit Logging**: All session lifecycle events, proxy requests, and git operations logged to `~/Library/Logs/claude-ai-skills-audit.jsonl`
 
 ## Environment Setup
 

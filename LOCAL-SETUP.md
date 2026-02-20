@@ -36,12 +36,12 @@ All three services (Flask proxy, MCP server, Cloudflare Tunnel) auto-start on lo
 launchctl list | grep joshuashew
 
 # Logs
-tail -f ~/Library/Logs/com.joshuashew.credential-proxy.log
-tail -f ~/Library/Logs/com.joshuashew.mcp-server.log
-tail -f ~/Library/Logs/com.joshuashew.cloudflare-tunnel.log
+tail -f ~/Library/Logs/com.joshuashew.claude-ai-skills.proxy.log
+tail -f ~/Library/Logs/com.joshuashew.claude-ai-skills.mcp.log
+tail -f ~/Library/Logs/com.joshuashew.claude-ai-skills.tunnel.log
 
 # Audit log (JSON Lines — session lifecycle, proxy requests, git operations)
-tail -f ~/Library/Logs/credential-proxy-audit.jsonl
+tail -f ~/Library/Logs/claude-ai-skills-audit.jsonl
 ```
 
 ## Cloudflare Tunnel
