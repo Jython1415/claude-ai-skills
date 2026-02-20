@@ -297,19 +297,32 @@ def extract_headers(payload: dict, names: list[str] | None = None) -> dict[str, 
 class _HTMLStripper(HTMLParser):
     """HTMLParser subclass that extracts text content from HTML."""
 
+    _SKIP_TAGS = frozenset(("script", "style"))
+
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self._parts: list[str] = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list) -> None:
+        if tag in self._SKIP_TAGS:
+            self._skip_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self._SKIP_TAGS and self._skip_depth > 0:
+            self._skip_depth -= 1
 
     def handle_data(self, data: str) -> None:
-        self._parts.append(data)
+        if self._skip_depth == 0:
+            self._parts.append(data)
 
 
 def strip_html(text: str) -> str:
     """Strip HTML tags and decode entities, returning plain text.
 
-    Uses stdlib html.parser for correct handling of malformed HTML,
-    script/style blocks, and character references.
+    Uses stdlib html.parser for correct handling of malformed HTML
+    and character references. Suppresses content inside <script> and
+    <style> elements.
 
     Args:
         text: HTML string to strip.

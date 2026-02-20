@@ -889,6 +889,12 @@ class TestStripHtml:
     def test_nested_tags(self):
         assert strip_html("<div><p>A</p><p>B</p></div>") == "AB"
 
+    def test_script_suppressed(self):
+        assert strip_html('<p>Hello</p><script>alert("x")</script>') == "Hello"
+
+    def test_style_suppressed(self):
+        assert strip_html("<style>.x{color:red}</style><p>Content</p>") == "Content"
+
 
 # ---------------------------------------------------------------------------
 # extract_attachments
