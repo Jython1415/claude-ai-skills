@@ -2,6 +2,16 @@
 
 All notable changes to the Gmail Access skill will be documented in this file.
 
+## [0.7.0] - 2026-02-20
+
+### Added
+- `batch_get_messages()` — fetch multiple messages in a single HTTP request using Gmail batch API
+- `batch_get_threads()` — fetch multiple threads in a single HTTP request using Gmail batch API
+
+### Changed
+- `search()` now uses batch API internally, reducing HTTP calls from N+1 to 2
+- `search_threads()` now uses batch API internally, reducing HTTP calls from N+1 to 2
+
 ## [0.6.0] - 2026-02-20
 
 ### Added

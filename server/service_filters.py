@@ -51,6 +51,11 @@ def validate_gmail_endpoint(method: str, path: str) -> tuple[bool, str]:
         Tuple of (is_allowed, error_message). error_message is empty when allowed.
     """
     method = method.upper()
+
+    # Allow batch endpoint (POST batch/gmail/v1) — used by batch_get_messages/threads
+    if method == "POST" and path == "batch/gmail/v1":
+        return True, ""
+
     segments = _parse_gmail_segments(path)
 
     if segments is None:

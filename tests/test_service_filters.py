@@ -363,6 +363,52 @@ class TestGmailEdgeCases:
 
 
 # =============================================================================
+# Gmail: Batch endpoint filtering
+# =============================================================================
+
+
+class TestServiceFilterBatch:
+    """Batch endpoint: only POST batch/gmail/v1 is allowed."""
+
+    def test_post_batch_endpoint_allowed(self):
+        allowed, error = validate_gmail_endpoint("POST", "batch/gmail/v1")
+        assert allowed is True
+        assert error == ""
+
+    def test_get_batch_endpoint_blocked(self):
+        """GET on the batch endpoint is not allowed — only POST."""
+        allowed, error = validate_gmail_endpoint("GET", "batch/gmail/v1")
+        assert allowed is False
+
+    def test_post_batch_wrong_version_blocked(self):
+        """batch/gmail/v2 is not the correct path — should be blocked."""
+        allowed, error = validate_gmail_endpoint("POST", "batch/gmail/v2")
+        assert allowed is False
+
+    def test_put_batch_endpoint_blocked(self):
+        """Only POST is permitted; PUT should be blocked."""
+        allowed, error = validate_gmail_endpoint("PUT", "batch/gmail/v1")
+        assert allowed is False
+
+    def test_delete_batch_endpoint_blocked(self):
+        """DELETE on the batch endpoint should be blocked."""
+        allowed, error = validate_gmail_endpoint("DELETE", "batch/gmail/v1")
+        assert allowed is False
+
+    def test_batch_endpoint_via_gmail_service_dispatcher(self):
+        """validate_proxy_request should allow POST batch/gmail/v1 for gmail service."""
+        allowed, error = validate_proxy_request("gmail", "POST", "batch/gmail/v1")
+        assert allowed is True
+        assert error == ""
+
+    def test_batch_endpoint_via_gmail_work_service_dispatcher(self):
+        """Gmail variant services should also allow the batch endpoint."""
+        allowed, error = validate_proxy_request("gmail_work", "POST", "batch/gmail/v1")
+        assert allowed is True
+        assert error == ""
+
+
+# =============================================================================
 # Dispatcher: validate_proxy_request
 # =============================================================================
 

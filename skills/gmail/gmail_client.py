@@ -23,7 +23,10 @@ Usage:
 """
 
 import base64
+import json
 import os
+import urllib.parse
+import uuid
 from email.mime.text import MIMEText
 from html.parser import HTMLParser
 
@@ -72,6 +75,40 @@ class _API:
     def _url(proxy_url: str, service: str, path: str) -> str:
         """Build the full proxy URL for a Gmail API path."""
         return f"{proxy_url}/proxy/{service}/gmail/v1/users/me/{path}"
+
+    @staticmethod
+    def _batch_url(proxy_url: str, service: str) -> str:
+        """Build the full proxy URL for the Gmail batch endpoint."""
+        return f"{proxy_url}/proxy/{service}/batch/gmail/v1"
+
+    @staticmethod
+    def batch_post(body: str, boundary: str) -> requests.Response:
+        """POST a multipart/mixed batch request to the Gmail batch endpoint.
+
+        Args:
+            body: Multipart request body string.
+            boundary: Boundary string used in the body.
+
+        Returns:
+            Raw requests.Response (not parsed).
+
+        Raises:
+            AuthRequiredError: If no session is available.
+            requests.exceptions.HTTPError: On non-2xx responses.
+        """
+        session_id, proxy_url, service = _API._get_session()
+        url = _API._batch_url(proxy_url, service)
+        response = requests.post(
+            url,
+            data=body.encode("utf-8"),
+            headers={
+                "X-Session-Id": session_id,
+                "Content-Type": f"multipart/mixed; boundary={boundary}",
+            },
+            timeout=DEFAULT_TIMEOUT,
+        )
+        response.raise_for_status()
+        return response
 
     @staticmethod
     def get(path: str, params: dict | None = None) -> dict:
@@ -432,6 +469,125 @@ def paginate(
 
 
 # ---------------------------------------------------------------------------
+# Batch helpers
+# ---------------------------------------------------------------------------
+
+_BATCH_LIMIT = 100
+
+
+def _build_batch_body(paths: list[str], boundary: str) -> str:
+    parts = []
+    for i, path in enumerate(paths):
+        parts.append(
+            f"--{boundary}\r\n"
+            f"Content-Type: application/http\r\n"
+            f"Content-ID: <item{i}>\r\n"
+            f"\r\n"
+            f"GET /{path} HTTP/1.1\r\n"
+            f"\r\n"
+        )
+    parts.append(f"--{boundary}--")
+    return "".join(parts)
+
+
+def _parse_batch_response(response: requests.Response) -> list[dict]:
+    content_type = response.headers.get("Content-Type", "")
+    boundary = None
+    for part in content_type.split(";"):
+        part = part.strip()
+        if part.startswith("boundary="):
+            boundary = part[len("boundary=") :].strip('"')
+            break
+    if not boundary:
+        return []
+
+    text = response.text
+    delimiter = f"--{boundary}"
+    raw_parts = text.split(delimiter)
+    # First element is preamble before first boundary, last is epilogue after --boundary--
+    raw_parts = raw_parts[1:]
+
+    results = []
+    for raw_part in raw_parts:
+        if raw_part.strip() == "--" or raw_part.strip() == "":
+            continue
+        # Strip leading \r\n
+        if raw_part.startswith("\r\n"):
+            raw_part = raw_part[2:]
+        # Split outer headers from body (blank line separator)
+        if "\r\n\r\n" not in raw_part:
+            continue
+        _, inner = raw_part.split("\r\n\r\n", 1)
+        # inner is the embedded HTTP response: status line, headers, blank line, body
+        if "\r\n" not in inner:
+            continue
+        status_line, rest = inner.split("\r\n", 1)
+        # Check for 200 status
+        status_parts = status_line.split(" ", 2)
+        if len(status_parts) < 2:
+            continue
+        try:
+            status_code = int(status_parts[1])
+        except ValueError:
+            continue
+        if status_code != 200:
+            continue
+        # Find the blank line separating inner headers from inner body
+        if "\r\n\r\n" not in rest:
+            continue
+        _, body = rest.split("\r\n\r\n", 1)
+        body = body.rstrip("\r\n")
+        if not body:
+            continue
+        try:
+            results.append(json.loads(body))
+        except (ValueError, KeyError):
+            continue
+
+    return results
+
+
+def batch_get_messages(
+    message_ids: list[str],
+    *,
+    format: str = "metadata",
+    metadata_headers: list[str] | None = None,
+) -> list[dict]:
+    params: dict = {"format": format}
+    if metadata_headers:
+        params["metadataHeaders"] = metadata_headers
+    paths = [f"gmail/v1/users/me/messages/{mid}?{urllib.parse.urlencode(params, doseq=True)}" for mid in message_ids]
+    results = []
+    for i in range(0, len(paths), _BATCH_LIMIT):
+        chunk = paths[i : i + _BATCH_LIMIT]
+        boundary = uuid.uuid4().hex
+        body = _build_batch_body(chunk, boundary)
+        response = api.batch_post(body, boundary)
+        results.extend(_parse_batch_response(response))
+    return results
+
+
+def batch_get_threads(
+    thread_ids: list[str],
+    *,
+    format: str = "metadata",
+    metadata_headers: list[str] | None = None,
+) -> list[dict]:
+    params: dict = {"format": format}
+    if metadata_headers:
+        params["metadataHeaders"] = metadata_headers
+    paths = [f"gmail/v1/users/me/threads/{tid}?{urllib.parse.urlencode(params, doseq=True)}" for tid in thread_ids]
+    results = []
+    for i in range(0, len(paths), _BATCH_LIMIT):
+        chunk = paths[i : i + _BATCH_LIMIT]
+        boundary = uuid.uuid4().hex
+        body = _build_batch_body(chunk, boundary)
+        response = api.batch_post(body, boundary)
+        results.extend(_parse_batch_response(response))
+    return results
+
+
+# ---------------------------------------------------------------------------
 # High-level operations
 # ---------------------------------------------------------------------------
 
@@ -458,12 +614,15 @@ def search(query: str = "", max_results: int = 10) -> list[dict]:
     if not stubs:
         return []
 
+    message_ids = [stub["id"] for stub in stubs]
+    messages = batch_get_messages(
+        message_ids,
+        format="metadata",
+        metadata_headers=["From", "To", "Subject", "Date"],
+    )
+
     results = []
-    for stub in stubs:
-        msg = api.get(
-            f"messages/{stub['id']}",
-            {"format": "metadata", "metadataHeaders": ["From", "To", "Subject", "Date"]},
-        )
+    for msg in messages:
         headers = extract_headers(msg.get("payload", {}), ["From", "To", "Subject", "Date"])
         results.append(
             {
@@ -609,9 +768,5 @@ def search_threads(query: str = "", max_results: int = 10) -> list[dict]:
     data = api.get("threads", params)
     thread_stubs = data.get("threads", [])
 
-    threads = []
-    for stub in thread_stubs:
-        thread = api.get(f"threads/{stub['id']}")
-        threads.append(thread)
-
-    return threads
+    thread_ids = [stub["id"] for stub in thread_stubs]
+    return batch_get_threads(thread_ids)
