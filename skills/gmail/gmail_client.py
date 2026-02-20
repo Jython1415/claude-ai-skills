@@ -25,6 +25,7 @@ Usage:
 import base64
 import os
 from email.mime.text import MIMEText
+from html.parser import HTMLParser
 
 import requests
 
@@ -261,7 +262,7 @@ def extract_body(payload: dict) -> str:
             if nested and nested != "(no text body)":
                 return nested
 
-    return text_plain or text_html or "(no text body)"
+    return text_plain or (strip_html(text_html) if text_html else None) or "(no text body)"
 
 
 def extract_headers(payload: dict, names: list[str] | None = None) -> dict[str, str]:
@@ -291,6 +292,94 @@ def extract_headers(payload: dict, names: list[str] | None = None) -> dict[str, 
         if requested is not None:
             result[requested] = header.get("value", "")
     return result
+
+
+class _HTMLStripper(HTMLParser):
+    """HTMLParser subclass that extracts text content from HTML."""
+
+    _SKIP_TAGS = frozenset(("script", "style"))
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self._parts: list[str] = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list) -> None:
+        if tag in self._SKIP_TAGS:
+            self._skip_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self._SKIP_TAGS and self._skip_depth > 0:
+            self._skip_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if self._skip_depth == 0:
+            self._parts.append(data)
+
+
+def strip_html(text: str) -> str:
+    """Strip HTML tags and decode entities, returning plain text.
+
+    Uses stdlib html.parser for correct handling of malformed HTML
+    and character references. Suppresses content inside <script> and
+    <style> elements.
+
+    Args:
+        text: HTML string to strip.
+
+    Returns:
+        Plain text with tags removed and entities decoded.
+    """
+    stripper = _HTMLStripper()
+    stripper.feed(text)
+    return "".join(stripper._parts)
+
+
+def extract_attachments(payload: dict) -> list[dict]:
+    """Extract attachment metadata from a message payload.
+
+    Walks the MIME tree and returns metadata for parts that have an
+    attachmentId (i.e., non-inline content that must be fetched separately).
+
+    Args:
+        payload: The message payload dict from the Gmail API.
+
+    Returns:
+        List of dicts with keys: filename, mime_type, attachment_id, size.
+    """
+    attachments = []
+
+    def _walk(part: dict) -> None:
+        body = part.get("body", {})
+        attachment_id = body.get("attachmentId")
+        if attachment_id:
+            attachments.append(
+                {
+                    "filename": part.get("filename", ""),
+                    "mime_type": part.get("mimeType", ""),
+                    "attachment_id": attachment_id,
+                    "size": body.get("size", 0),
+                }
+            )
+        for sub in part.get("parts", []):
+            _walk(sub)
+
+    _walk(payload)
+    return attachments
+
+
+def get_attachment(message_id: str, attachment_id: str) -> bytes:
+    """Download an attachment and return its raw bytes.
+
+    Args:
+        message_id: The message ID containing the attachment.
+        attachment_id: The attachment ID from extract_attachments().
+
+    Returns:
+        The decoded attachment bytes.
+    """
+    data = api.get(f"messages/{message_id}/attachments/{attachment_id}")
+    return base64.urlsafe_b64decode(data["data"])
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 """Tests for the shared Gmail API client module."""
 
+import base64
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -14,14 +15,17 @@ from gmail_client import (
     api,
     create_draft,
     decode_body,
+    extract_attachments,
     extract_body,
     extract_headers,
+    get_attachment,
     get_message,
     get_profile,
     get_thread,
     paginate,
     search,
     search_threads,
+    strip_html,
 )
 
 # ---------------------------------------------------------------------------
@@ -36,6 +40,11 @@ def _mock_response(json_data, status_code=200, content=b"{}"):
     resp.raise_for_status.return_value = None
     resp.content = content
     return resp
+
+
+def _b64(text: str) -> str:
+    """Base64url-encode a string for Gmail API test payloads."""
+    return base64.urlsafe_b64encode(text.encode()).decode()
 
 
 def _make_payload(*, mime_type="text/plain", body_data=None, headers=None, parts=None):
@@ -340,7 +349,7 @@ class TestExtractBody:
                 {"mimeType": "text/html", "body": {"data": html}},
             ],
         )
-        assert extract_body(payload) == "<p>HTML only</p>"
+        assert extract_body(payload) == "HTML only"
 
     def test_no_text_body(self):
         payload = _make_payload(
@@ -855,3 +864,149 @@ class TestSearchThreads:
         call_params = mock_get.call_args[1]["params"]
         assert "q" not in call_params
         assert call_params["maxResults"] == 10
+
+
+# ---------------------------------------------------------------------------
+# strip_html
+# ---------------------------------------------------------------------------
+
+
+class TestStripHtml:
+    """Tests for strip_html."""
+
+    def test_basic_tags(self):
+        assert strip_html("<p>Hello <b>world</b></p>") == "Hello world"
+
+    def test_entities(self):
+        assert strip_html("&amp; &lt; &gt;") == "& < >"
+
+    def test_empty_string(self):
+        assert strip_html("") == ""
+
+    def test_no_html(self):
+        assert strip_html("plain text") == "plain text"
+
+    def test_nested_tags(self):
+        assert strip_html("<div><p>A</p><p>B</p></div>") == "AB"
+
+    def test_script_suppressed(self):
+        assert strip_html('<p>Hello</p><script>alert("x")</script>') == "Hello"
+
+    def test_style_suppressed(self):
+        assert strip_html("<style>.x{color:red}</style><p>Content</p>") == "Content"
+
+
+# ---------------------------------------------------------------------------
+# extract_attachments
+# ---------------------------------------------------------------------------
+
+
+class TestExtractAttachments:
+    """Tests for extract_attachments."""
+
+    def test_message_with_attachment(self):
+        payload = _make_payload(
+            mime_type="multipart/mixed",
+            parts=[
+                {
+                    "mimeType": "text/plain",
+                    "body": {"data": _b64("hello")},
+                },
+                {
+                    "mimeType": "application/pdf",
+                    "filename": "doc.pdf",
+                    "body": {"attachmentId": "att-123", "size": 4096},
+                },
+            ],
+        )
+        result = extract_attachments(payload)
+        assert len(result) == 1
+        assert result[0] == {
+            "filename": "doc.pdf",
+            "mime_type": "application/pdf",
+            "attachment_id": "att-123",
+            "size": 4096,
+        }
+
+    def test_no_attachments(self):
+        payload = _make_payload(
+            mime_type="text/plain",
+            body_data=_b64("hello"),
+        )
+        assert extract_attachments(payload) == []
+
+    def test_multiple_attachments(self):
+        payload = _make_payload(
+            mime_type="multipart/mixed",
+            parts=[
+                {
+                    "mimeType": "text/plain",
+                    "body": {"data": _b64("hello")},
+                },
+                {
+                    "mimeType": "application/pdf",
+                    "filename": "a.pdf",
+                    "body": {"attachmentId": "att-1", "size": 100},
+                },
+                {
+                    "mimeType": "image/png",
+                    "filename": "b.png",
+                    "body": {"attachmentId": "att-2", "size": 200},
+                },
+            ],
+        )
+        result = extract_attachments(payload)
+        assert len(result) == 2
+        assert result[0]["filename"] == "a.pdf"
+        assert result[1]["filename"] == "b.png"
+
+    def test_nested_attachment(self):
+        payload = _make_payload(
+            mime_type="multipart/mixed",
+            parts=[
+                {
+                    "mimeType": "multipart/alternative",
+                    "body": {},
+                    "parts": [
+                        {
+                            "mimeType": "text/plain",
+                            "body": {"data": _b64("hello")},
+                        },
+                    ],
+                },
+                {
+                    "mimeType": "application/pdf",
+                    "filename": "nested.pdf",
+                    "body": {"attachmentId": "att-nested", "size": 500},
+                },
+            ],
+        )
+        result = extract_attachments(payload)
+        assert len(result) == 1
+        assert result[0]["attachment_id"] == "att-nested"
+
+
+# ---------------------------------------------------------------------------
+# get_attachment
+# ---------------------------------------------------------------------------
+
+
+class TestGetAttachment:
+    """Tests for get_attachment."""
+
+    @patch("gmail_client.requests.get")
+    def test_downloads_and_decodes(self, mock_get, monkeypatch):
+        monkeypatch.setenv("SESSION_ID", "test-session")
+        monkeypatch.setenv("PROXY_URL", "http://localhost:8443")
+        monkeypatch.setenv("GMAIL_SERVICE", "gmail")
+
+        raw_bytes = b"PDF content here"
+        encoded = base64.urlsafe_b64encode(raw_bytes).decode()
+        mock_get.return_value = _mock_response({"data": encoded, "size": len(raw_bytes)})
+
+        result = get_attachment("msg-123", "att-456")
+
+        assert result == raw_bytes
+        mock_get.assert_called_once()
+        call_url = mock_get.call_args[0][0]
+        assert "messages/msg-123/attachments/att-456" in call_url
