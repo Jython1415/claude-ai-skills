@@ -10,6 +10,7 @@ All validation functions return (is_allowed: bool, error_message: str) tuples.
 When is_allowed is True, error_message is an empty string.
 """
 
+import json
 import re
 
 # Gmail API path prefix: gmail/v1/users/{userId}/
@@ -159,6 +160,110 @@ def validate_gmail_endpoint(method: str, path: str, body: bytes | str | None = N
     return False, f"Endpoint not in allowlist: {method} {path}"
 
 
+# =============================================================================
+# Bluesky (ATProto) endpoint filtering
+# =============================================================================
+
+# ATProto record collections that are blocked for createRecord / putRecord.
+# These are content-creation operations that Placeholder is not permitted to perform.
+_BSKY_BLOCKED_COLLECTIONS = frozenset(
+    {
+        "app.bsky.feed.post",
+        "app.bsky.feed.repost",
+        "app.bsky.feed.threadgate",
+        "app.bsky.feed.generator",
+    }
+)
+
+# ATProto record collections explicitly allowed for createRecord / putRecord.
+# Social interaction operations — likes, follows, blocks, mutes, list membership.
+_BSKY_ALLOWED_WRITE_COLLECTIONS = frozenset(
+    {
+        "app.bsky.feed.like",
+        "app.bsky.graph.follow",
+        "app.bsky.graph.block",
+        "app.bsky.graph.listitem",
+    }
+)
+
+# ATProto repo write endpoints that require collection-level inspection.
+_BSKY_COLLECTION_ENDPOINTS = frozenset(
+    {
+        "com.atproto.repo.createRecord",
+        "com.atproto.repo.putRecord",
+    }
+)
+
+
+def _parse_bsky_collection(body: bytes | str | None) -> str | None:
+    """
+    Parse the 'collection' field from an ATProto repo operation body.
+
+    Args:
+        body: Raw request body (bytes or str).
+
+    Returns:
+        Collection NSID string, or None if body is absent/unparseable.
+    """
+    if not body:
+        return None
+    try:
+        text = body.decode("utf-8") if isinstance(body, bytes) else body
+        data = json.loads(text)
+        return data.get("collection") or None
+    except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
+        return None
+
+
+def validate_bluesky_endpoint(method: str, path: str, body: bytes | str | None = None) -> tuple[bool, str]:
+    """
+    Validate a Bluesky (ATProto) API request against the proxy's endpoint policy.
+
+    Policy:
+    - Block content creation: createRecord / putRecord for post, repost,
+      threadgate, and generator collections.
+    - Allow social interactions: createRecord / putRecord for like, follow,
+      block, mute, and listitem collections.
+    - Block applyWrites entirely (can embed blocked write operations).
+    - Allow deleteRecord for any collection (content removal is safe).
+    - Allow all other endpoints (reads, notifications, preferences, etc.).
+
+    The path is the XRPC endpoint NSID as received after /proxy/bsky/,
+    e.g. "com.atproto.repo.createRecord" or "app.bsky.graph.muteActor".
+
+    Args:
+        method: HTTP method (GET, POST, etc.)
+        path: XRPC endpoint NSID
+        body: Optional JSON request body
+
+    Returns:
+        Tuple of (is_allowed, error_message). error_message is empty when allowed.
+    """
+    # Block applyWrites entirely: it batches arbitrary write operations and
+    # cannot be safely inspected without parsing the full write batch spec.
+    if path == "com.atproto.repo.applyWrites":
+        return False, "applyWrites is blocked by proxy policy (potential bypass for content creation restrictions)"
+
+    # Inspect collection for createRecord and putRecord.
+    if path in _BSKY_COLLECTION_ENDPOINTS:
+        collection = _parse_bsky_collection(body)
+
+        if collection is None:
+            return False, f"{path} blocked: could not determine collection from request body (fail-safe)"
+
+        if collection in _BSKY_BLOCKED_COLLECTIONS:
+            return False, f"Creating/updating '{collection}' records is blocked by proxy policy"
+
+        if collection in _BSKY_ALLOWED_WRITE_COLLECTIONS:
+            return True, ""
+
+        # Unknown collection: deny by default (conservative).
+        return False, f"Unknown collection '{collection}' — only explicitly allowed collections are permitted for {path}"
+
+    # All other endpoints pass through (reads, deleteRecord, mutes, notifications, etc.)
+    return True, ""
+
+
 def validate_proxy_request(service: str, method: str, path: str, body: bytes | str | None = None) -> tuple[bool, str]:
     """
     Dispatcher: check if a service has endpoint filtering, and apply it.
@@ -176,6 +281,9 @@ def validate_proxy_request(service: str, method: str, path: str, body: bytes | s
     """
     if service == "gmail" or service.startswith("gmail_"):
         return validate_gmail_endpoint(method, path, body)
+
+    if service == "bsky" or service.startswith("bsky_"):
+        return validate_bluesky_endpoint(method, path, body)
 
     # No filter for this service — allow through
     return True, ""

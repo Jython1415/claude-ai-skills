@@ -23,9 +23,19 @@ sys.path.insert(0, "/path/to/skills/bluesky")
 
 Public read operations (profiles, search, feeds, trending) work immediately with no further setup.
 
+### Write restrictions
+
+The credential proxy enforces the following write policy on the `bsky` service. This is a hard block — it applies to all sessions and cannot be bypassed.
+
+**Blocked (content creation):** `app.bsky.feed.post`, `app.bsky.feed.repost`, `app.bsky.feed.threadgate`, `app.bsky.feed.generator`
+
+**Allowed writes:** `app.bsky.feed.like`, `app.bsky.graph.follow`, `app.bsky.graph.block`, `app.bsky.graph.mute`, `app.bsky.graph.listitem`, plus all direct-POST graph/notification/bookmark endpoints (muteActor, updateSeen, etc.) and deleteRecord for any collection.
+
+`com.atproto.repo.applyWrites` is blocked entirely (potential bypass vector).
+
 ### Authenticated operations
 
-For writes (posting, liking, following), timeline, notifications, known_followers, and other auth-required endpoints, create a session first using the `create_session` MCP tool:
+For likes, follows, timeline, notifications, known_followers, and other auth-required endpoints, create a session first using the `create_session` MCP tool:
 
 ```
 create_session(services=["bsky"], ttl_minutes=30)
@@ -223,24 +233,29 @@ for uri in liked_posts:
     print(f"  {uri}")
 ```
 
-### Create a post (authenticated)
+### Like a post (authenticated)
 
 ```python
 from bsky_client import api
-from datetime import datetime, timezone
 
 # Requires SESSION_ID and PROXY_URL (see "Authenticated operations" above)
+# First, get the post to obtain its uri and cid
+post_data = api.get("app.bsky.feed.getPosts", {"uris": ["at://did:plc:.../app.bsky.feed.post/rkey"]})
+post = post_data["posts"][0]
+
 result = api.post("com.atproto.repo.createRecord", {
     "repo": "your-did-here",
-    "collection": "app.bsky.feed.post",
+    "collection": "app.bsky.feed.like",
     "record": {
-        "$type": "app.bsky.feed.post",
-        "text": "Hello from Claude!",
-        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "$type": "app.bsky.feed.like",
+        "subject": {"uri": post["uri"], "cid": post["cid"]},
+        "createdAt": post["indexedAt"],
     }
 })
-print(f"Posted: {result['uri']}")
+print(f"Liked: {result['uri']}")
 ```
+
+> **Note:** Creating posts (`app.bsky.feed.post`), reposts, threadgates, and feed generators is blocked by proxy policy. See "Write restrictions" above.
 
 ### Get trending topics
 
@@ -384,9 +399,9 @@ Most write operations go through [`com.atproto.repo.createRecord`](https://docs.
 
 | Action | `collection` | `record` fields | Notes |
 |--------|-------------|-----------------|-------|
-| **Post** | `app.bsky.feed.post` | `text`, `createdAt`, optional `embed`, `facets`, `reply` | See [creating a post](https://docs.bsky.app/docs/tutorials/creating-a-post) for embeds and rich text |
+| **Post** | `app.bsky.feed.post` | `text`, `createdAt`, optional `embed`, `facets`, `reply` | **BLOCKED by proxy policy** |
 | **Like** | `app.bsky.feed.like` | `subject: {uri, cid}`, `createdAt` | `subject` is a strong ref — get `uri` and `cid` from the post object |
-| **Repost** | `app.bsky.feed.repost` | `subject: {uri, cid}`, `createdAt` | Same strong ref as like |
+| **Repost** | `app.bsky.feed.repost` | `subject: {uri, cid}`, `createdAt` | **BLOCKED by proxy policy** |
 | **Follow** | `app.bsky.graph.follow` | `subject: "<did>"`, `createdAt` | `subject` is a DID string, not a strong ref |
 | **Block** | `app.bsky.graph.block` | `subject: "<did>"`, `createdAt` | Same shape as follow |
 | **List item** | `app.bsky.graph.listitem` | `subject: "<did>"`, `list: "<at-uri>"`, `createdAt` | Adds an actor to a list |
