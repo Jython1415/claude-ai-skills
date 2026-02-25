@@ -351,10 +351,11 @@ class TestProxyAdminKeyAuth:
         """Existing X-Session-Id path is unchanged."""
         from unittest.mock import MagicMock, patch
 
-        # Create a session with bsky access
-        resp = client.post("/sessions", json={"services": ["bsky"]}, headers=auth_headers)
-        assert resp.status_code == 200
-        session_id = resp.get_json()["session_id"]
+        from server.proxy_server import session_store
+
+        # Create session directly to avoid depending on credential_store service list
+        session = session_store.create(["bsky"], ttl_minutes=30)
+        session_id = session.session_id
 
         mock_response = MagicMock()
         mock_response.status_code = 200
