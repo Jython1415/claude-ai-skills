@@ -2,6 +2,13 @@
 
 All notable changes to the Bluesky Access skill will be documented in this file.
 
+## [2.1.0] - 2026-02-24
+
+### Changed
+
+- Write policy: posting, reposting, threadgate, and feed generator creation are now blocked by the credential proxy for the `bsky` service. Social interactions (like, follow, block, mute, list item) remain allowed. `applyWrites` is blocked entirely as a bypass guard.
+- Updated `SKILL.md` to document write restrictions: added "Write restrictions" section, replaced "Create a post" example with "Like a post", and marked Post and Repost as blocked in the Write Operations quick reference table.
+
 ## [2.0.4] - 2026-02-13
 
 ### Added

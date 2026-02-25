@@ -5,9 +5,11 @@ Tests the validation functions in server/service_filters.py that enforce
 proxy-level endpoint restrictions (e.g., blocking Gmail send endpoints).
 """
 
+import json
+
 import pytest
 
-from server.service_filters import validate_gmail_endpoint, validate_proxy_request
+from server.service_filters import validate_bluesky_endpoint, validate_gmail_endpoint, validate_proxy_request
 
 # =============================================================================
 # Gmail: Send endpoints blocked
@@ -546,9 +548,9 @@ class TestValidateProxyRequest:
         assert allowed is False
         assert "settings" in error.lower()
 
-    def test_bsky_passes_through(self):
-        """Non-Gmail services should pass through unfiltered."""
-        allowed, error = validate_proxy_request("bsky", "POST", "any/path/here")
+    def test_bsky_read_passes_through(self):
+        """Bsky read endpoints pass through the filter."""
+        allowed, error = validate_proxy_request("bsky", "GET", "app.bsky.feed.getTimeline")
         assert allowed is True
         assert error == ""
 
@@ -561,6 +563,270 @@ class TestValidateProxyRequest:
         allowed, error = validate_proxy_request("custom_svc", "POST", "some/endpoint")
         assert allowed is True
         assert error == ""
+
+
+# =============================================================================
+# Bluesky: Blocked collections (post, repost, threadgate, generator)
+# =============================================================================
+
+
+def _make_create_body(collection: str) -> bytes:
+    """Build a minimal createRecord body for a given collection."""
+    return json.dumps({"repo": "did:plc:test123", "collection": collection, "record": {}}).encode()
+
+
+class TestBskyBlockedCollections:
+    """createRecord / putRecord with blocked collections should be denied."""
+
+    def test_create_post_blocked(self):
+        body = _make_create_body("app.bsky.feed.post")
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.createRecord", body)
+        assert allowed is False
+        assert "app.bsky.feed.post" in error
+
+    def test_create_repost_blocked(self):
+        body = _make_create_body("app.bsky.feed.repost")
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.createRecord", body)
+        assert allowed is False
+        assert "app.bsky.feed.repost" in error
+
+    def test_create_threadgate_blocked(self):
+        body = _make_create_body("app.bsky.feed.threadgate")
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.createRecord", body)
+        assert allowed is False
+        assert "app.bsky.feed.threadgate" in error
+
+    def test_create_generator_blocked(self):
+        body = _make_create_body("app.bsky.feed.generator")
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.createRecord", body)
+        assert allowed is False
+        assert "app.bsky.feed.generator" in error
+
+    def test_put_post_blocked(self):
+        """putRecord with blocked collection is also denied."""
+        body = _make_create_body("app.bsky.feed.post")
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.putRecord", body)
+        assert allowed is False
+        assert "app.bsky.feed.post" in error
+
+    def test_put_repost_blocked(self):
+        body = _make_create_body("app.bsky.feed.repost")
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.putRecord", body)
+        assert allowed is False
+        assert "app.bsky.feed.repost" in error
+
+
+# =============================================================================
+# Bluesky: Allowed write collections (like, follow, block, mute, listitem)
+# =============================================================================
+
+
+class TestBskyAllowedWriteCollections:
+    """createRecord / putRecord with allowed collections should pass."""
+
+    def test_create_like_allowed(self):
+        body = _make_create_body("app.bsky.feed.like")
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.createRecord", body)
+        assert allowed is True
+        assert error == ""
+
+    def test_create_follow_allowed(self):
+        body = _make_create_body("app.bsky.graph.follow")
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.createRecord", body)
+        assert allowed is True
+        assert error == ""
+
+    def test_create_block_allowed(self):
+        body = _make_create_body("app.bsky.graph.block")
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.createRecord", body)
+        assert allowed is True
+        assert error == ""
+
+    def test_create_listitem_allowed(self):
+        body = _make_create_body("app.bsky.graph.listitem")
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.createRecord", body)
+        assert allowed is True
+        assert error == ""
+
+    def test_put_like_allowed(self):
+        body = _make_create_body("app.bsky.feed.like")
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.putRecord", body)
+        assert allowed is True
+        assert error == ""
+
+
+# =============================================================================
+# Bluesky: deleteRecord always allowed
+# =============================================================================
+
+
+class TestBskyDeleteAllowed:
+    """deleteRecord is allowed for any collection (content removal is safe)."""
+
+    def test_delete_post_record_allowed(self):
+        """Deleting a post record (e.g., undoing a post) is allowed."""
+        body = json.dumps(
+            {"repo": "did:plc:test123", "collection": "app.bsky.feed.post", "rkey": "3abc123"}
+        ).encode()
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.deleteRecord", body)
+        assert allowed is True
+        assert error == ""
+
+    def test_delete_like_allowed(self):
+        body = json.dumps(
+            {"repo": "did:plc:test123", "collection": "app.bsky.feed.like", "rkey": "3abc123"}
+        ).encode()
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.deleteRecord", body)
+        assert allowed is True
+        assert error == ""
+
+
+# =============================================================================
+# Bluesky: applyWrites blocked entirely
+# =============================================================================
+
+
+class TestBskyApplyWritesBlocked:
+    """applyWrites is blocked regardless of body contents."""
+
+    def test_apply_writes_no_body_blocked(self):
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.applyWrites")
+        assert allowed is False
+        assert "applyWrites" in error
+
+    def test_apply_writes_with_body_blocked(self):
+        body = json.dumps({"repo": "did:plc:test123", "writes": []}).encode()
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.applyWrites", body)
+        assert allowed is False
+        assert "applyWrites" in error
+
+
+# =============================================================================
+# Bluesky: Read and other write endpoints allowed
+# =============================================================================
+
+
+class TestBskyOtherEndpointsAllowed:
+    """Reads and non-record-creation write endpoints should pass through."""
+
+    def test_get_timeline_allowed(self):
+        allowed, error = validate_bluesky_endpoint("GET", "app.bsky.feed.getTimeline")
+        assert allowed is True
+        assert error == ""
+
+    def test_get_notifications_allowed(self):
+        allowed, error = validate_bluesky_endpoint("GET", "app.bsky.notification.listNotifications")
+        assert allowed is True
+        assert error == ""
+
+    def test_mute_actor_allowed(self):
+        allowed, error = validate_bluesky_endpoint("POST", "app.bsky.graph.muteActor")
+        assert allowed is True
+        assert error == ""
+
+    def test_unmute_actor_allowed(self):
+        allowed, error = validate_bluesky_endpoint("POST", "app.bsky.graph.unmuteActor")
+        assert allowed is True
+        assert error == ""
+
+    def test_update_seen_allowed(self):
+        allowed, error = validate_bluesky_endpoint("POST", "app.bsky.notification.updateSeen")
+        assert allowed is True
+        assert error == ""
+
+    def test_put_preferences_allowed(self):
+        allowed, error = validate_bluesky_endpoint("POST", "app.bsky.actor.putPreferences")
+        assert allowed is True
+        assert error == ""
+
+    def test_upload_blob_allowed(self):
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.uploadBlob")
+        assert allowed is True
+        assert error == ""
+
+
+# =============================================================================
+# Bluesky: Edge cases (malformed body, missing collection)
+# =============================================================================
+
+
+class TestBskyEdgeCases:
+    """Edge cases for createRecord / putRecord body inspection."""
+
+    def test_create_record_no_body_denied(self):
+        """Missing body cannot be inspected — fail safe."""
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.createRecord")
+        assert allowed is False
+        assert "could not determine collection" in error
+
+    def test_create_record_empty_body_denied(self):
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.createRecord", b"")
+        assert allowed is False
+        assert "could not determine collection" in error
+
+    def test_create_record_invalid_json_denied(self):
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.createRecord", b"not json")
+        assert allowed is False
+        assert "could not determine collection" in error
+
+    def test_create_record_no_collection_field_denied(self):
+        body = json.dumps({"repo": "did:plc:test123", "record": {}}).encode()
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.createRecord", body)
+        assert allowed is False
+        assert "could not determine collection" in error
+
+    def test_create_record_unknown_collection_denied(self):
+        """Unknown collections are denied by default (conservative)."""
+        body = _make_create_body("app.bsky.some.unknownType")
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.createRecord", body)
+        assert allowed is False
+        assert "Unknown collection" in error
+
+    def test_create_record_bytes_body_parsed(self):
+        """Body as bytes (from Flask request.get_data()) is parsed correctly."""
+        body = json.dumps({"repo": "did:plc:test123", "collection": "app.bsky.feed.like", "record": {}}).encode(
+            "utf-8"
+        )
+        allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.createRecord", body)
+        assert allowed is True
+        assert error == ""
+
+
+# =============================================================================
+# Bluesky: Dispatcher integration
+# =============================================================================
+
+
+class TestBskyDispatcherIntegration:
+    """validate_proxy_request routes bsky to the Bluesky filter."""
+
+    def test_bsky_create_post_blocked_via_dispatcher(self):
+        body = _make_create_body("app.bsky.feed.post")
+        allowed, error = validate_proxy_request("bsky", "POST", "com.atproto.repo.createRecord", body)
+        assert allowed is False
+        assert "app.bsky.feed.post" in error
+
+    def test_bsky_create_like_allowed_via_dispatcher(self):
+        body = _make_create_body("app.bsky.feed.like")
+        allowed, error = validate_proxy_request("bsky", "POST", "com.atproto.repo.createRecord", body)
+        assert allowed is True
+        assert error == ""
+
+    def test_bsky_apply_writes_blocked_via_dispatcher(self):
+        allowed, error = validate_proxy_request("bsky", "POST", "com.atproto.repo.applyWrites")
+        assert allowed is False
+
+    def test_bsky_read_allowed_via_dispatcher(self):
+        allowed, error = validate_proxy_request("bsky", "GET", "app.bsky.feed.getTimeline")
+        assert allowed is True
+        assert error == ""
+
+    def test_bsky_variant_service_also_filtered(self):
+        """bsky_personal / bsky_work variants should also be filtered."""
+        body = _make_create_body("app.bsky.feed.post")
+        allowed, error = validate_proxy_request("bsky_personal", "POST", "com.atproto.repo.createRecord", body)
+        assert allowed is False
+        assert "app.bsky.feed.post" in error
 
 
 if __name__ == "__main__":
