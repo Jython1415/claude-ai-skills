@@ -77,13 +77,14 @@ class AuditLog:
     ) -> None:
         entry = {
             "event": "proxy_request",
-            "session_id": session_id,
             "service": service,
             "method": method,
             "path": path,
             "upstream_url": upstream_url,
             "status": status_code,
         }
+        if session_id:
+            entry["session_id"] = session_id
         if blocked_reason:
             entry["blocked_reason"] = blocked_reason
         if auth_type:

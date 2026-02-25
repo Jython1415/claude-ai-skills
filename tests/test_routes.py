@@ -327,9 +327,7 @@ class TestProxyAdminKeyAuth:
         with patch("server.proxy_server.forward_request", return_value=mock_response):
             resp = client.get("/proxy/bsky/some.endpoint", headers=auth_headers)
 
-        # Should not get 401/403; forward_request mock returns 200
-        assert resp.status_code != 401
-        assert resp.status_code != 403
+        assert resp.status_code == 200
 
     def test_proxy_rejects_invalid_admin_key(self, client):
         """Wrong X-Auth-Key should return 401."""

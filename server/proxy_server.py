@@ -355,6 +355,9 @@ def proxy_request(service: str, rest: str):
     elif auth_key:
         if not verify_auth(auth_key):
             return jsonify({"error": "invalid auth key"}), 401
+        # Admin key grants access to all services — no per-service check.
+        # The admin key is trusted at the same level as session creation and
+        # other admin-only endpoints. Service-level endpoint filters still apply.
         session_id = None
         auth_type = "admin_key"
     else:
