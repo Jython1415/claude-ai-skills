@@ -343,15 +343,25 @@ def proxy_request(service: str, rest: str):
         ), 400
 
     session_id = request.headers.get("X-Session-Id")
-    if not session_id:
-        return jsonify({"error": "missing X-Session-Id header"}), 401
+    auth_key = request.headers.get("X-Auth-Key")
 
-    session = session_store.get(session_id)
-    if session is None:
-        return jsonify({"error": "invalid or expired session"}), 401
-
-    if not session.has_service(service):
-        return jsonify({"error": f"session does not have access to {service}"}), 403
+    if session_id:
+        session = session_store.get(session_id)
+        if session is None:
+            return jsonify({"error": "invalid or expired session"}), 401
+        if not session.has_service(service):
+            return jsonify({"error": f"session does not have access to {service}"}), 403
+        auth_type = "session"
+    elif auth_key:
+        if not verify_auth(auth_key):
+            return jsonify({"error": "invalid auth key"}), 401
+        # Admin key grants access to all services — no per-service check.
+        # The admin key is trusted at the same level as session creation and
+        # other admin-only endpoints. Service-level endpoint filters still apply.
+        session_id = None
+        auth_type = "admin_key"
+    else:
+        return jsonify({"error": "missing X-Session-Id or X-Auth-Key header"}), 401
 
     # Check service-specific endpoint filters (e.g., Gmail send blocking)
     allowed, filter_error = validate_proxy_request(service, request.method, rest, request.get_data())
@@ -365,6 +375,7 @@ def proxy_request(service: str, rest: str):
             upstream_url=f"[BLOCKED] {service}/{rest}",
             status_code=403,
             blocked_reason=filter_error,
+            auth_type=auth_type,
         )
         return error_response(
             what="Operation not permitted",
@@ -397,6 +408,7 @@ def proxy_request(service: str, rest: str):
         path=rest,
         upstream_url=upstream_url,
         status_code=response.status_code,
+        auth_type=auth_type,
     )
 
     return response

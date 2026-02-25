@@ -35,7 +35,8 @@ class AuthRequiredError(Exception):
     def __init__(self, endpoint: str):
         self.endpoint = endpoint
         super().__init__(
-            f"Endpoint '{endpoint}' requires authentication. Set SESSION_ID and PROXY_URL environment variables."
+            f"Endpoint '{endpoint}' requires authentication. "
+            "Set SESSION_ID and PROXY_URL, or PROXY_AUTH_KEY and PROXY_URL environment variables."
         )
 
 
@@ -115,12 +116,15 @@ class _API:
     """Namespace for API request methods."""
 
     @staticmethod
-    def _get_session():
-        """Return (session_id, proxy_url) or (None, None)."""
-        session_id = os.environ.get("SESSION_ID")
+    def _get_auth():
+        """Return (headers_dict, proxy_url) or (None, None)."""
         proxy_url = os.environ.get("PROXY_URL")
+        session_id = os.environ.get("SESSION_ID")
         if session_id and proxy_url:
-            return session_id, proxy_url
+            return {"X-Session-Id": session_id}, proxy_url
+        auth_key = os.environ.get("PROXY_AUTH_KEY")
+        if auth_key and proxy_url:
+            return {"X-Auth-Key": auth_key}, proxy_url
         return None, None
 
     @staticmethod
@@ -142,15 +146,15 @@ class _API:
             requests.exceptions.HTTPError: On non-2xx responses
         """
         category = _classify(endpoint)
-        session_id, proxy_url = _API._get_session()
+        auth_headers, proxy_url = _API._get_auth()
 
         if category == "public_only":
             url = f"{PUBLIC_API}/{endpoint}"
             headers = {}
         else:  # auth_required
-            if session_id and proxy_url:
+            if auth_headers and proxy_url:
                 url = f"{proxy_url}/proxy/bsky/{endpoint}"
-                headers = {"X-Session-Id": session_id}
+                headers = auth_headers
             else:
                 raise AuthRequiredError(endpoint)
 
@@ -175,12 +179,12 @@ class _API:
             AuthRequiredError: If no session is available
             requests.exceptions.HTTPError: On non-2xx responses
         """
-        session_id, proxy_url = _API._get_session()
-        if not session_id or not proxy_url:
+        auth_headers, proxy_url = _API._get_auth()
+        if not auth_headers or not proxy_url:
             raise AuthRequiredError(endpoint)
 
         url = f"{proxy_url}/proxy/bsky/{endpoint}"
-        headers = {"X-Session-Id": session_id}
+        headers = auth_headers
 
         response = requests.post(url, json=json, headers=headers, timeout=DEFAULT_TIMEOUT)
         response.raise_for_status()

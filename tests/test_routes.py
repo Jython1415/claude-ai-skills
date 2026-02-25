@@ -305,3 +305,71 @@ class TestIssues:
                 headers=auth_headers,
             )
         assert resp.status_code == 503
+
+
+# =============================================================================
+# Proxy admin-key auth (X-Auth-Key)
+# =============================================================================
+
+
+class TestProxyAdminKeyAuth:
+    """Tests for proxy route accepting X-Auth-Key as alternative to X-Session-Id."""
+
+    def test_proxy_accepts_admin_key(self, client, auth_headers):
+        """X-Auth-Key grants access to proxy without a session."""
+        from unittest.mock import MagicMock, patch
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/json"}
+        mock_response.content = b'{"ok": true}'
+
+        with patch("server.proxy_server.forward_request", return_value=mock_response):
+            resp = client.get("/proxy/bsky/some.endpoint", headers=auth_headers)
+
+        assert resp.status_code == 200
+
+    def test_proxy_rejects_invalid_admin_key(self, client):
+        """Wrong X-Auth-Key should return 401."""
+        resp = client.get("/proxy/bsky/some.endpoint", headers={"X-Auth-Key": "wrong-key"})
+        assert resp.status_code == 401
+
+    def test_proxy_no_auth_returns_401(self, client):
+        """No auth header at all returns 401."""
+        resp = client.get("/proxy/bsky/some.endpoint")
+        assert resp.status_code == 401
+
+    def test_proxy_admin_key_blocked_for_git_service(self, client, auth_headers):
+        """Even with admin key, 'git' is not a proxy service."""
+        resp = client.get("/proxy/git/some/path", headers=auth_headers)
+        assert resp.status_code == 400
+        assert "not a proxy service" in resp.get_json()["error"]
+
+    def test_proxy_session_id_still_works(self, client, auth_headers):
+        """Existing X-Session-Id path is unchanged."""
+        from unittest.mock import MagicMock, patch
+
+        from server.proxy_server import session_store
+
+        # Create session directly to avoid depending on credential_store service list
+        session = session_store.create(["bsky"], ttl_minutes=30)
+        session_id = session.session_id
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/json"}
+        mock_response.content = b'{"ok": true}'
+
+        with patch("server.proxy_server.forward_request", return_value=mock_response):
+            resp = client.get("/proxy/bsky/some.endpoint", headers={"X-Session-Id": session_id})
+
+        assert resp.status_code != 401
+        assert resp.status_code != 403
+
+    def test_proxy_session_service_filter_still_applies(self, client, auth_headers):
+        """Session-based auth still enforces per-service access control."""
+        resp = client.post("/sessions", json={"services": ["git"]}, headers=auth_headers)
+        session_id = resp.get_json()["session_id"]
+
+        resp = client.get("/proxy/bsky/some.endpoint", headers={"X-Session-Id": session_id})
+        assert resp.status_code == 403
