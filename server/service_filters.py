@@ -258,7 +258,10 @@ def validate_bluesky_endpoint(method: str, path: str, body: bytes | str | None =
             return True, ""
 
         # Unknown collection: deny by default (conservative).
-        return False, f"Unknown collection '{collection}' — only explicitly allowed collections are permitted for {path}"
+        return (
+            False,
+            f"Unknown collection '{collection}' — only explicitly allowed collections are permitted for {path}",
+        )
 
     # All other endpoints pass through (reads, deleteRecord, mutes, notifications, etc.)
     return True, ""
