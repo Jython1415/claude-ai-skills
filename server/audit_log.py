@@ -66,13 +66,14 @@ class AuditLog:
 
     def proxy_request(
         self,
-        session_id: str,
+        session_id: str | None,
         service: str,
         method: str,
         path: str,
         upstream_url: str,
         status_code: int,
         blocked_reason: str | None = None,
+        auth_type: str | None = None,
     ) -> None:
         entry = {
             "event": "proxy_request",
@@ -85,6 +86,8 @@ class AuditLog:
         }
         if blocked_reason:
             entry["blocked_reason"] = blocked_reason
+        if auth_type:
+            entry["auth_type"] = auth_type
         self._write(entry)
 
     def git_fetch(self, session_id: str | None, repo_url: str, status_code: int, auth_type: str | None = None) -> None:

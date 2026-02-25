@@ -40,8 +40,9 @@ class AuthRequiredError(Exception):
 
     def __init__(self):
         super().__init__(
-            "Gmail requires authentication. Set SESSION_ID and PROXY_URL environment variables "
-            "(use MCP create_session tool)."
+            "Gmail requires authentication. Set SESSION_ID and PROXY_URL, "
+            "or PROXY_AUTH_KEY and PROXY_URL environment variables "
+            "(use MCP create_session tool or set PROXY_AUTH_KEY directly)."
         )
 
 
@@ -58,18 +59,25 @@ class _API:
     """
 
     @staticmethod
-    def _get_session() -> tuple[str, str, str]:
-        """Return (session_id, proxy_url, service) or raise.
+    def _get_session() -> tuple[dict, str, str]:
+        """Return (headers_dict, proxy_url, service) or raise.
+
+        Priority 1: SESSION_ID + PROXY_URL -> X-Session-Id header
+        Priority 2: PROXY_AUTH_KEY + PROXY_URL -> X-Auth-Key header
 
         Raises:
-            AuthRequiredError: If SESSION_ID or PROXY_URL is missing.
+            AuthRequiredError: If no valid auth env vars are set.
         """
-        session_id = os.environ.get("SESSION_ID")
         proxy_url = os.environ.get("PROXY_URL")
-        if not session_id or not proxy_url:
-            raise AuthRequiredError()
-        service = os.environ.get("GMAIL_SERVICE", "gmail")
-        return session_id, proxy_url, service
+        session_id = os.environ.get("SESSION_ID")
+        if session_id and proxy_url:
+            service = os.environ.get("GMAIL_SERVICE", "gmail")
+            return {"X-Session-Id": session_id}, proxy_url, service
+        auth_key = os.environ.get("PROXY_AUTH_KEY")
+        if auth_key and proxy_url:
+            service = os.environ.get("GMAIL_SERVICE", "gmail")
+            return {"X-Auth-Key": auth_key}, proxy_url, service
+        raise AuthRequiredError()
 
     @staticmethod
     def _url(proxy_url: str, service: str, path: str) -> str:
@@ -96,15 +104,12 @@ class _API:
             AuthRequiredError: If no session is available.
             requests.exceptions.HTTPError: On non-2xx responses.
         """
-        session_id, proxy_url, service = _API._get_session()
+        session_headers, proxy_url, service = _API._get_session()
         url = _API._batch_url(proxy_url, service)
         response = requests.post(
             url,
             data=body.encode("utf-8"),
-            headers={
-                "X-Session-Id": session_id,
-                "Content-Type": f"multipart/mixed; boundary={boundary}",
-            },
+            headers={**session_headers, "Content-Type": f"multipart/mixed; boundary={boundary}"},
             timeout=DEFAULT_TIMEOUT,
         )
         response.raise_for_status()
@@ -126,12 +131,12 @@ class _API:
             AuthRequiredError: If no session is available.
             requests.exceptions.HTTPError: On non-2xx responses.
         """
-        session_id, proxy_url, service = _API._get_session()
+        session_headers, proxy_url, service = _API._get_session()
         url = _API._url(proxy_url, service, path)
         response = requests.get(
             url,
             params=params,
-            headers={"X-Session-Id": session_id},
+            headers=session_headers,
             timeout=DEFAULT_TIMEOUT,
         )
         response.raise_for_status()
@@ -152,12 +157,12 @@ class _API:
             AuthRequiredError: If no session is available.
             requests.exceptions.HTTPError: On non-2xx responses.
         """
-        session_id, proxy_url, service = _API._get_session()
+        session_headers, proxy_url, service = _API._get_session()
         url = _API._url(proxy_url, service, path)
         response = requests.post(
             url,
             json=json,
-            headers={"X-Session-Id": session_id},
+            headers=session_headers,
             timeout=DEFAULT_TIMEOUT,
         )
         response.raise_for_status()
@@ -177,11 +182,11 @@ class _API:
             AuthRequiredError: If no session is available.
             requests.exceptions.HTTPError: On non-2xx responses.
         """
-        session_id, proxy_url, service = _API._get_session()
+        session_headers, proxy_url, service = _API._get_session()
         url = _API._url(proxy_url, service, path)
         response = requests.delete(
             url,
-            headers={"X-Session-Id": session_id},
+            headers=session_headers,
             timeout=DEFAULT_TIMEOUT,
         )
         response.raise_for_status()
@@ -205,12 +210,12 @@ class _API:
             AuthRequiredError: If no session is available.
             requests.exceptions.HTTPError: On non-2xx responses.
         """
-        session_id, proxy_url, service = _API._get_session()
+        session_headers, proxy_url, service = _API._get_session()
         url = _API._url(proxy_url, service, path)
         response = requests.patch(
             url,
             json=json,
-            headers={"X-Session-Id": session_id},
+            headers=session_headers,
             timeout=DEFAULT_TIMEOUT,
         )
         response.raise_for_status()
@@ -231,12 +236,12 @@ class _API:
             AuthRequiredError: If no session is available.
             requests.exceptions.HTTPError: On non-2xx responses.
         """
-        session_id, proxy_url, service = _API._get_session()
+        session_headers, proxy_url, service = _API._get_session()
         url = _API._url(proxy_url, service, path)
         response = requests.put(
             url,
             json=json,
-            headers={"X-Session-Id": session_id},
+            headers=session_headers,
             timeout=DEFAULT_TIMEOUT,
         )
         response.raise_for_status()

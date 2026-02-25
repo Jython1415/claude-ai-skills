@@ -1529,3 +1529,96 @@ class TestGetAttachment:
         mock_get.assert_called_once()
         call_url = mock_get.call_args[0][0]
         assert "messages/msg-123/attachments/att-456" in call_url
+
+
+# ---------------------------------------------------------------------------
+# PROXY_AUTH_KEY fallback
+# ---------------------------------------------------------------------------
+
+
+class TestProxyAuthKeyFallback:
+    """Tests for PROXY_AUTH_KEY + PROXY_URL auth path in gmail_client."""
+
+    @patch("gmail_client.requests.get")
+    def test_get_uses_auth_key_when_set(self, mock_get, monkeypatch):
+        """When PROXY_AUTH_KEY + PROXY_URL are set, X-Auth-Key header is used for GET."""
+        monkeypatch.delenv("SESSION_ID", raising=False)
+        monkeypatch.setenv("PROXY_AUTH_KEY", "my-admin-key")
+        monkeypatch.setenv("PROXY_URL", "http://localhost:8443")
+        mock_get.return_value = _mock_response({"emailAddress": "user@example.com"})
+
+        api.get("profile")
+
+        mock_get.assert_called_once()
+        call_kwargs = mock_get.call_args[1]
+        assert call_kwargs["headers"] == {"X-Auth-Key": "my-admin-key"}
+
+    @patch("gmail_client.requests.post")
+    def test_post_uses_auth_key_when_set(self, mock_post, monkeypatch):
+        """POST requests use X-Auth-Key when PROXY_AUTH_KEY is set."""
+        monkeypatch.delenv("SESSION_ID", raising=False)
+        monkeypatch.setenv("PROXY_AUTH_KEY", "my-admin-key")
+        monkeypatch.setenv("PROXY_URL", "http://localhost:8443")
+        mock_post.return_value = _mock_response({"id": "draft-123"})
+
+        api.post("drafts", {"message": {"raw": "abc"}})
+
+        call_kwargs = mock_post.call_args[1]
+        assert call_kwargs["headers"] == {"X-Auth-Key": "my-admin-key"}
+
+    @patch("gmail_client.requests.get")
+    def test_session_id_takes_priority_over_auth_key(self, mock_get, monkeypatch):
+        """SESSION_ID takes priority over PROXY_AUTH_KEY when both are set."""
+        monkeypatch.setenv("SESSION_ID", "my-session")
+        monkeypatch.setenv("PROXY_AUTH_KEY", "my-admin-key")
+        monkeypatch.setenv("PROXY_URL", "http://localhost:8443")
+        mock_get.return_value = _mock_response({"emailAddress": "user@example.com"})
+
+        api.get("profile")
+
+        call_kwargs = mock_get.call_args[1]
+        assert call_kwargs["headers"] == {"X-Session-Id": "my-session"}
+
+    def test_raises_without_auth(self, monkeypatch):
+        """AuthRequiredError raised when neither SESSION_ID nor PROXY_AUTH_KEY is set."""
+        monkeypatch.delenv("SESSION_ID", raising=False)
+        monkeypatch.delenv("PROXY_AUTH_KEY", raising=False)
+        monkeypatch.delenv("PROXY_URL", raising=False)
+
+        with pytest.raises(AuthRequiredError):
+            api.get("profile")
+
+    def test_raises_when_auth_key_without_proxy_url(self, monkeypatch):
+        """AuthRequiredError raised when PROXY_AUTH_KEY is set but PROXY_URL is missing."""
+        monkeypatch.delenv("SESSION_ID", raising=False)
+        monkeypatch.setenv("PROXY_AUTH_KEY", "my-admin-key")
+        monkeypatch.delenv("PROXY_URL", raising=False)
+
+        with pytest.raises(AuthRequiredError):
+            api.get("profile")
+
+    @patch("gmail_client.requests.delete")
+    def test_delete_uses_auth_key(self, mock_delete, monkeypatch):
+        """DELETE requests use X-Auth-Key when PROXY_AUTH_KEY is set."""
+        monkeypatch.delenv("SESSION_ID", raising=False)
+        monkeypatch.setenv("PROXY_AUTH_KEY", "my-admin-key")
+        monkeypatch.setenv("PROXY_URL", "http://localhost:8443")
+        mock_delete.return_value = _mock_response({}, status_code=204, content=b"")
+
+        api.delete("messages/msg-123")
+
+        call_kwargs = mock_delete.call_args[1]
+        assert call_kwargs["headers"] == {"X-Auth-Key": "my-admin-key"}
+
+    @patch("gmail_client.requests.patch")
+    def test_patch_uses_auth_key(self, mock_patch, monkeypatch):
+        """PATCH requests use X-Auth-Key when PROXY_AUTH_KEY is set."""
+        monkeypatch.delenv("SESSION_ID", raising=False)
+        monkeypatch.setenv("PROXY_AUTH_KEY", "my-admin-key")
+        monkeypatch.setenv("PROXY_URL", "http://localhost:8443")
+        mock_patch.return_value = _mock_response({"id": "msg-123"})
+
+        api.patch("messages/msg-123", {"addLabelIds": ["STARRED"]})
+
+        call_kwargs = mock_patch.call_args[1]
+        assert call_kwargs["headers"] == {"X-Auth-Key": "my-admin-key"}

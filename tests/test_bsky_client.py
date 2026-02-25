@@ -352,3 +352,80 @@ class TestPaginate:
 
         call_params = mock_get.call_args[1]["params"]
         assert call_params["limit"] == 50
+
+
+# ---------------------------------------------------------------------------
+# PROXY_AUTH_KEY fallback
+# ---------------------------------------------------------------------------
+
+
+class TestProxyAuthKeyFallback:
+    """Tests for PROXY_AUTH_KEY + PROXY_URL auth path in bsky_client."""
+
+    def _mock_response(self, json_data, status_code=200):
+        from unittest.mock import MagicMock
+        resp = MagicMock()
+        resp.status_code = status_code
+        resp.json.return_value = json_data
+        resp.raise_for_status.return_value = None
+        return resp
+
+    @patch("bsky_client.requests.get")
+    def test_auth_required_uses_auth_key_when_set(self, mock_get, monkeypatch):
+        """When PROXY_AUTH_KEY + PROXY_URL are set, X-Auth-Key header is used."""
+        monkeypatch.delenv("SESSION_ID", raising=False)
+        monkeypatch.setenv("PROXY_AUTH_KEY", "my-admin-key")
+        monkeypatch.setenv("PROXY_URL", "https://proxy.example.com")
+        mock_get.return_value = self._mock_response({"feed": []})
+
+        api.get("app.bsky.feed.getTimeline")
+
+        mock_get.assert_called_once()
+        call_kwargs = mock_get.call_args[1]
+        assert call_kwargs["headers"] == {"X-Auth-Key": "my-admin-key"}
+        call_url = mock_get.call_args[0][0]
+        assert "proxy.example.com" in call_url
+
+    @patch("bsky_client.requests.post")
+    def test_post_uses_auth_key_when_set(self, mock_post, monkeypatch):
+        """POST requests use X-Auth-Key when PROXY_AUTH_KEY is set."""
+        monkeypatch.delenv("SESSION_ID", raising=False)
+        monkeypatch.setenv("PROXY_AUTH_KEY", "my-admin-key")
+        monkeypatch.setenv("PROXY_URL", "https://proxy.example.com")
+        mock_post.return_value = self._mock_response({"uri": "at://..."})
+
+        api.post("com.atproto.repo.createRecord", {"repo": "did:plc:abc"})
+
+        call_kwargs = mock_post.call_args[1]
+        assert call_kwargs["headers"] == {"X-Auth-Key": "my-admin-key"}
+
+    @patch("bsky_client.requests.get")
+    def test_session_id_takes_priority_over_auth_key(self, mock_get, monkeypatch):
+        """SESSION_ID takes priority over PROXY_AUTH_KEY when both are set."""
+        monkeypatch.setenv("SESSION_ID", "my-session")
+        monkeypatch.setenv("PROXY_AUTH_KEY", "my-admin-key")
+        monkeypatch.setenv("PROXY_URL", "https://proxy.example.com")
+        mock_get.return_value = self._mock_response({"feed": []})
+
+        api.get("app.bsky.feed.getTimeline")
+
+        call_kwargs = mock_get.call_args[1]
+        assert call_kwargs["headers"] == {"X-Session-Id": "my-session"}
+
+    def test_raises_when_neither_set(self, monkeypatch):
+        """AuthRequiredError raised when neither SESSION_ID nor PROXY_AUTH_KEY is set."""
+        monkeypatch.delenv("SESSION_ID", raising=False)
+        monkeypatch.delenv("PROXY_AUTH_KEY", raising=False)
+        monkeypatch.delenv("PROXY_URL", raising=False)
+
+        with pytest.raises(AuthRequiredError):
+            api.get("app.bsky.feed.getTimeline")
+
+    def test_raises_when_auth_key_without_proxy_url(self, monkeypatch):
+        """AuthRequiredError raised when PROXY_AUTH_KEY is set but PROXY_URL is missing."""
+        monkeypatch.delenv("SESSION_ID", raising=False)
+        monkeypatch.setenv("PROXY_AUTH_KEY", "my-admin-key")
+        monkeypatch.delenv("PROXY_URL", raising=False)
+
+        with pytest.raises(AuthRequiredError):
+            api.get("app.bsky.feed.getTimeline")
