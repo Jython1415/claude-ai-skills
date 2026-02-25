@@ -364,6 +364,7 @@ class TestProxyAuthKeyFallback:
 
     def _mock_response(self, json_data, status_code=200):
         from unittest.mock import MagicMock
+
         resp = MagicMock()
         resp.status_code = status_code
         resp.json.return_value = json_data
