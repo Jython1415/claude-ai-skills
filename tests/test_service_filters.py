@@ -665,17 +665,13 @@ class TestBskyDeleteAllowed:
 
     def test_delete_post_record_allowed(self):
         """Deleting a post record (e.g., undoing a post) is allowed."""
-        body = json.dumps(
-            {"repo": "did:plc:test123", "collection": "app.bsky.feed.post", "rkey": "3abc123"}
-        ).encode()
+        body = json.dumps({"repo": "did:plc:test123", "collection": "app.bsky.feed.post", "rkey": "3abc123"}).encode()
         allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.deleteRecord", body)
         assert allowed is True
         assert error == ""
 
     def test_delete_like_allowed(self):
-        body = json.dumps(
-            {"repo": "did:plc:test123", "collection": "app.bsky.feed.like", "rkey": "3abc123"}
-        ).encode()
+        body = json.dumps({"repo": "did:plc:test123", "collection": "app.bsky.feed.like", "rkey": "3abc123"}).encode()
         allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.deleteRecord", body)
         assert allowed is True
         assert error == ""
@@ -784,9 +780,7 @@ class TestBskyEdgeCases:
 
     def test_create_record_bytes_body_parsed(self):
         """Body as bytes (from Flask request.get_data()) is parsed correctly."""
-        body = json.dumps({"repo": "did:plc:test123", "collection": "app.bsky.feed.like", "record": {}}).encode(
-            "utf-8"
-        )
+        body = json.dumps({"repo": "did:plc:test123", "collection": "app.bsky.feed.like", "record": {}}).encode("utf-8")
         allowed, error = validate_bluesky_endpoint("POST", "com.atproto.repo.createRecord", body)
         assert allowed is True
         assert error == ""
