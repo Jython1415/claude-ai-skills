@@ -2,6 +2,13 @@
 
 All notable changes to the git-proxy skill will be documented in this file.
 
+## [1.3.0] - 2026-02-26
+
+### Changed
+- Decouple session setup instructions from SKILL.md: Setup section now uses requirements-only language (Requires SESSION_ID and PROXY_URL; service name: "git") instead of imperative create_session procedure
+- sys.path instruction now uses self-referential path derivation instead of a hardcoded placeholder
+- report_skill_issue reference replaced with consumer-agnostic link to the claude-ai-skills repository
+
 ## [1.2.1] - 2024-12-25
 
 ### Fixed

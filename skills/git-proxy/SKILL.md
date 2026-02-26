@@ -21,26 +21,22 @@ Claude.ai script
 
 ## Setup
 
-### 1. Create a Session (MCP Tool)
+Add the skill directory to `sys.path`. When you loaded this file, you read it from a
+known path — derive the skill directory from that path:
 
-Before using git operations, create a session via the MCP custom connector:
-
+```python
+import sys, os
+skill_dir = os.path.dirname(os.path.abspath("/path/where/you/read/this/SKILL.md"))
+if skill_dir not in sys.path:
+    sys.path.insert(0, skill_dir)
 ```
-Use create_session with services: ["git"]
-```
 
-This returns:
-- `session_id` -- use in `X-Session-Id` header for all requests
-- `proxy_url` -- public HTTPS URL for the proxy (e.g., `https://proxy.joshuashew.com`)
+Replace `/path/where/you/read/this/SKILL.md` with the actual path you used to read this
+file (e.g., `/mnt/skills/user/git-proxy/SKILL.md`).
 
-### 2. Set Environment Variables
+### Credentials
 
-Scripts expect these environment variables (provided by MCP session):
-
-| Variable | Description |
-|----------|-------------|
-| `SESSION_ID` | Session ID from create_session |
-| `PROXY_URL` | Proxy URL from create_session (public Cloudflare Tunnel URL) |
+Requires `SESSION_ID` and `PROXY_URL` environment variables. Service name: `"git"`.
 
 ## Usage
 
@@ -197,4 +193,4 @@ Using `HEAD` causes "Couldn't find remote ref" errors on the server side.
 
 ## Reporting Issues
 
-Encountered a problem or have a suggestion? Use the `report_skill_issue` MCP tool to submit a bug report or enhancement request.
+Encountered a problem or have a suggestion? Report it to the [claude-ai-skills repository](https://github.com/Jython1415/claude-ai-skills).

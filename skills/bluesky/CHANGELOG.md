@@ -2,6 +2,13 @@
 
 All notable changes to the Bluesky Access skill will be documented in this file.
 
+## [2.3.0] - 2026-02-26
+
+### Changed
+- Decouple session setup instructions from SKILL.md: Setup section now uses requirements-only language (Requires SESSION_ID and PROXY_URL; service name: "bsky") instead of imperative create_session procedure
+- sys.path instruction now uses self-referential path derivation instead of a hardcoded placeholder
+- report_skill_issue reference replaced with consumer-agnostic link to the claude-ai-skills repository
+
 ## [2.1.0] - 2026-02-24
 
 ### Changed

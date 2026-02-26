@@ -2,6 +2,14 @@
 
 All notable changes to the Gmail Access skill will be documented in this file.
 
+## [0.9.0] - 2026-02-26
+
+### Changed
+- Decouple session setup instructions from SKILL.md: Setup section now uses requirements-only language (Requires SESSION_ID and PROXY_URL; service name: "gmail") instead of imperative create_session procedure
+- sys.path instruction now uses self-referential path derivation instead of a hardcoded placeholder
+- Multi-account support section no longer references create_session; uses consumer-agnostic phrasing instead
+- report_skill_issue reference replaced with consumer-agnostic link to the claude-ai-skills repository
+
 ## [0.7.0] - 2026-02-20
 
 ### Added
