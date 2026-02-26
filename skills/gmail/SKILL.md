@@ -337,7 +337,7 @@ The proxy enforces endpoint-level filtering for defense-in-depth, independent of
 
 **Gmail API quotas:** Gmail API has per-user and per-project quotas. Most read operations cost 5 quota units; batch operations cost more. See [Gmail API usage limits](https://developers.google.com/gmail/api/reference/quota) for details.
 
-When the rate limit is approached or exceeded, the proxy injects standard headers:
+The proxy injects the following rate limit headers on every response:
 - `X-RateLimit-Limit` — Request limit for the time window
 - `X-RateLimit-Remaining` — Requests remaining in the current window
 - `X-RateLimit-Reset` — Unix timestamp when the limit resets
