@@ -101,7 +101,8 @@ re-run `sudo cloudflared service install <token>`.
 
 ## Documentation
 
-- [CLAUDE.md](CLAUDE.md) - Technical reference for Claude Code
+- [DEVELOPMENT.md](DEVELOPMENT.md) - Development guide (architecture, API, configuration, security)
+- [CLAUDE.md](CLAUDE.md) - Claude Code agent-specific instructions
 - [mcp/README.md](mcp/README.md) - MCP server details
 
 ## License
