@@ -12,6 +12,7 @@ All file operations use temporary directories with automatic cleanup.
 
 import hmac
 import logging
+import math
 import os
 import re
 import shutil
@@ -64,6 +65,7 @@ limiter = Limiter(
     app=app,
     storage_uri="memory://",
     default_limits=[],
+    headers_enabled=True,
 )
 
 
@@ -400,6 +402,12 @@ def proxy_request(service: str, rest: str):
         query_string=request.query_string.decode(),
         credential_store=credential_store,
     )
+
+    # Inject session TTL header so callers can track expiry without a separate API call.
+    # Only available for session-based auth (admin key has no associated session TTL).
+    if auth_type == "session" and session is not None:
+        minutes_remaining = math.ceil(session.time_remaining().total_seconds() / 60)
+        response.headers["X-Proxy-Session-Expires-In"] = str(minutes_remaining)
 
     audit_log.proxy_request(
         session_id=session_id,
