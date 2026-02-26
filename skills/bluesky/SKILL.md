@@ -14,12 +14,17 @@ Read operations use the public API directly (no authentication needed). Write op
 
 ## Setup
 
-Both modules live alongside this file. Add the skill directory to `sys.path`:
+Both modules live alongside this file. Add the skill directory to `sys.path`. When you
+loaded this file, you read it from a known path — derive the skill directory from that path:
 
 ```python
-import sys
-sys.path.insert(0, "/path/to/skills/bluesky")
+import sys, os
+skill_dir = os.path.dirname(os.path.abspath("/path/where/you/read/this/SKILL.md"))
+if skill_dir not in sys.path:
+    sys.path.insert(0, skill_dir)
 ```
+
+Replace `/path/where/you/read/this/SKILL.md` with the actual path you used to read this file.
 
 Public read operations (profiles, search, feeds, trending) work immediately with no further setup.
 
@@ -35,23 +40,9 @@ The credential proxy enforces the following write policy on the `bsky` service. 
 
 ### Authenticated operations
 
-For likes, follows, timeline, notifications, known_followers, and other auth-required endpoints, create a session first using the `create_session` MCP tool:
+Requires `SESSION_ID` and `PROXY_URL` environment variables. Service name: `"bsky"`.
 
-```
-create_session(services=["bsky"], ttl_minutes=30)
-```
-
-Then set the returned values as environment variables so the client can route through the credential proxy:
-
-```python
-import os
-os.environ["SESSION_ID"] = "<session_id from create_session>"
-os.environ["PROXY_URL"] = "<proxy_url from create_session>"
-```
-
-Once set, `api.get()` and `api.post()` automatically route auth-required endpoints through the proxy. No additional configuration is needed -- the client handles the routing.
-
-Sessions are service-agnostic -- one session can grant access to multiple services (e.g., `["bsky", "gmail"]`). Sessions expire after the specified TTL (default 30 minutes).
+For likes, follows, timeline, notifications, known_followers, and other auth-required endpoints, `api.get()` and `api.post()` automatically route through the proxy when these variables are set. No additional configuration is needed -- the client handles the routing.
 
 ## Examples
 
@@ -448,4 +439,4 @@ Send raw bytes with `Content-Type` set to the MIME type (e.g., `image/png`). Ret
 
 ## Reporting Issues
 
-Encountered a problem or have a suggestion? Use the `report_skill_issue` MCP tool to submit a bug report or enhancement request.
+Encountered a problem or have a suggestion? Report it to the [claude-ai-skills repository](https://github.com/Jython1415/claude-ai-skills).

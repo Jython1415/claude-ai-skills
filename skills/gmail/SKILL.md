@@ -13,30 +13,24 @@ All operations require authentication through the credential proxy. Credentials 
 
 ## Setup
 
-Add the skill directory to `sys.path`:
+Add the skill directory to `sys.path`. When you loaded this file, you read it from a
+known path — derive the skill directory from that path:
 
 ```python
-import sys
-sys.path.insert(0, "/path/to/skills/gmail")
+import sys, os
+skill_dir = os.path.dirname(os.path.abspath("/path/where/you/read/this/SKILL.md"))
+if skill_dir not in sys.path:
+    sys.path.insert(0, skill_dir)
 ```
 
-Create a session using the `create_session` MCP tool:
+Replace `/path/where/you/read/this/SKILL.md` with the actual path you used to read this
+file (e.g., `/mnt/skills/user/gmail/SKILL.md`).
 
-```
-create_session(services=["gmail"], ttl_minutes=30)
-```
+### Credentials
 
-Then set the returned values as environment variables:
-
-```python
-import os
-os.environ["SESSION_ID"] = "<session_id from create_session>"
-os.environ["PROXY_URL"] = "<proxy_url from create_session>"
-```
+Requires `SESSION_ID` and `PROXY_URL` environment variables. Service name: `"gmail"`.
 
 Once set, `api.get()`, `api.post()`, `api.delete()`, `api.patch()`, and `api.put()` automatically route through the credential proxy. No additional configuration is needed.
-
-Sessions are service-agnostic -- one session can grant access to multiple services (e.g., `["gmail", "bsky"]`). Sessions expire after the specified TTL (default 30 minutes).
 
 ### Multi-account support
 
@@ -46,11 +40,7 @@ Multiple Gmail accounts can be configured with custom service names (e.g., `gmai
 os.environ["GMAIL_SERVICE"] = "gmail_work"
 ```
 
-When creating a session, include the specific service name:
-
-```
-create_session(services=["gmail_work"], ttl_minutes=30)
-```
+When obtaining credentials for a non-default account, use the custom service name as the service identifier instead of `"gmail"`.
 
 ## Examples
 
@@ -347,4 +337,4 @@ The proxy enforces endpoint-level filtering for defense-in-depth, independent of
 
 ## Reporting Issues
 
-Encountered a problem or have a suggestion? Use the `report_skill_issue` MCP tool to submit a bug report or enhancement request.
+Encountered a problem or have a suggestion? Report it to the [claude-ai-skills repository](https://github.com/Jython1415/claude-ai-skills).

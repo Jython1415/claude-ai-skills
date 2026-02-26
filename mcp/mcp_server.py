@@ -106,6 +106,10 @@ async def create_session(context: Context, services: list[str], ttl_minutes: int
         - expires_in_minutes: Session lifetime
         - services: List of services this session can access
 
+        To use with skill libraries, store the returned values as environment variables:
+            os.environ["SESSION_ID"] = result["session_id"]
+            os.environ["PROXY_URL"] = result["proxy_url"]
+
     Example:
         result = create_session(["bsky", "git"], ttl_minutes=60)
         # Use result["session_id"] and result["proxy_url"] in your scripts
