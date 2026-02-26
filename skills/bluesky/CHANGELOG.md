@@ -2,6 +2,15 @@
 
 All notable changes to the Bluesky Access skill will be documented in this file.
 
+## [2.4.0] - 2026-02-26
+
+### Added
+- Documented `PROXY_AUTH_KEY` environment variable: when `SESSION_ID` is not set, `bsky_client` falls back to `X-Auth-Key` admin auth. Session credentials take priority when both are set.
+
+### Fixed
+- Corrected write restrictions documentation: `app.bsky.graph.mute` is not a valid `createRecord` collection NSID. Mute operations (`muteActor`, `unmuteActor`, `muteThread`, `unmuteThread`) are direct-POST endpoints, not `createRecord` operations.
+- Added note that endpoint restrictions apply to all auth methods including admin key access.
+
 ## [2.3.0] - 2026-02-26
 
 ### Changed
@@ -9,7 +18,7 @@ All notable changes to the Bluesky Access skill will be documented in this file.
 - sys.path instruction now uses self-referential path derivation instead of a hardcoded placeholder
 - report_skill_issue reference replaced with consumer-agnostic link to the claude-ai-skills repository
 
-## [2.1.0] - 2026-02-24
+## [2.2.0] - 2026-02-24
 
 ### Changed
 

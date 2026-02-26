@@ -2,6 +2,12 @@
 
 All notable changes to the Gmail Access skill will be documented in this file.
 
+## [0.10.0] - 2026-02-26
+
+### Added
+- Document proxy-injected response headers in Rate Limits section: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, `Retry-After`, and `X-Proxy-Session-Expires-In` (session auth only)
+- Note that endpoint restrictions are enforced at the proxy level for all auth methods, including admin key access
+
 ## [0.9.0] - 2026-02-26
 
 ### Changed

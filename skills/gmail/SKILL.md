@@ -314,7 +314,9 @@ Gmail supports powerful search operators in the `q` parameter:
 
 ### Restricted Operations
 
-The proxy enforces endpoint-level filtering for defense-in-depth, independent of OAuth scopes:
+The proxy enforces endpoint-level filtering for defense-in-depth, independent of OAuth scopes.
+
+> **Note:** Endpoint restrictions are enforced by the credential proxy, independent of OAuth scopes. They apply to all authentication methods including admin key access.
 
 **Blocked:**
 - **Send** (`messages/send`, `drafts/send`) -- Email cannot be sent through the proxy; use drafts instead
@@ -334,6 +336,14 @@ The proxy enforces endpoint-level filtering for defense-in-depth, independent of
 **Credential proxy:** 300 requests/minute per session.
 
 **Gmail API quotas:** Gmail API has per-user and per-project quotas. Most read operations cost 5 quota units; batch operations cost more. See [Gmail API usage limits](https://developers.google.com/gmail/api/reference/quota) for details.
+
+The proxy injects the following rate limit headers on every response:
+- `X-RateLimit-Limit` — Request limit for the time window
+- `X-RateLimit-Remaining` — Requests remaining in the current window
+- `X-RateLimit-Reset` — Unix timestamp when the limit resets
+- `Retry-After` — Seconds to wait (only on 429 responses)
+
+The proxy also injects `X-Proxy-Session-Expires-In` on session-authenticated responses — an integer showing minutes remaining before the session expires (useful for pre-emptive session refresh). This header is not present on admin key (`X-Auth-Key`) requests.
 
 ## Reporting Issues
 

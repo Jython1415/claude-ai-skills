@@ -27,7 +27,7 @@ cp .env.example .env
 ```
 
 Required env vars:
-- `PROXY_SECRET_KEY` - generate with `openssl rand -hex 32`
+- **`PROXY_SECRET_KEY`** - generate with `openssl rand -hex 32` — **required; the Flask proxy will fail to start without it**
 - `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` - from a [GitHub OAuth App](https://github.com/settings/developers)
 - `GITHUB_ALLOWED_USERS` - comma-separated GitHub usernames
 - `BASE_URL` - your Cloudflare Tunnel domain (e.g. `https://mcp.yourdomain.com`)

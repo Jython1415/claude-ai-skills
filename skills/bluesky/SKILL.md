@@ -34,9 +34,15 @@ The credential proxy enforces the following write policy on the `bsky` service. 
 
 **Blocked (content creation):** `app.bsky.feed.post`, `app.bsky.feed.repost`, `app.bsky.feed.threadgate`, `app.bsky.feed.generator`
 
-**Allowed writes:** `app.bsky.feed.like`, `app.bsky.graph.follow`, `app.bsky.graph.block`, `app.bsky.graph.mute`, `app.bsky.graph.listitem`, plus all direct-POST graph/notification/bookmark endpoints (muteActor, updateSeen, etc.) and deleteRecord for any collection.
+**Allowed createRecord collections:** `app.bsky.feed.like`, `app.bsky.graph.follow`, `app.bsky.graph.block`, `app.bsky.graph.listitem`
+
+**Allowed direct-POST endpoints:** Mute/unmute operations (`muteActor`, `unmuteActor`, `muteThread`, `unmuteThread`) pass through as direct POST endpoints — they are not `createRecord` operations and do not use a collection NSID. Other graph, notification, and bookmark direct-POST endpoints are also allowed.
+
+**deleteRecord** is allowed for any collection.
 
 `com.atproto.repo.applyWrites` is blocked entirely (potential bypass vector).
+
+> **Note:** Endpoint restrictions are enforced by the credential proxy, independent of session auth. They apply to all authentication methods including admin key access.
 
 ### Authenticated operations
 
