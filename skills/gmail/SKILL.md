@@ -343,7 +343,7 @@ When the rate limit is approached or exceeded, the proxy injects standard header
 - `X-RateLimit-Reset` — Unix timestamp when the limit resets
 - `Retry-After` — Seconds to wait (only on 429 responses)
 
-The proxy also injects `X-Proxy-Session-Expires-In` on every response — an integer showing minutes remaining before the session expires (useful for pre-emptive session refresh).
+The proxy also injects `X-Proxy-Session-Expires-In` on session-authenticated responses — an integer showing minutes remaining before the session expires (useful for pre-emptive session refresh). This header is not present on admin key (`X-Auth-Key`) requests.
 
 ## Reporting Issues
 
