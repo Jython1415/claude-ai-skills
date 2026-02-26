@@ -373,3 +373,39 @@ class TestProxyAdminKeyAuth:
 
         resp = client.get("/proxy/bsky/some.endpoint", headers={"X-Session-Id": session_id})
         assert resp.status_code == 403
+
+    def test_proxy_injects_session_expires_in_header(self, client, auth_headers):
+        """Proxy response includes X-Proxy-Session-Expires-In with numeric minutes remaining."""
+        from unittest.mock import patch
+
+        from flask import Response
+
+        from server.proxy_server import session_store
+
+        session = session_store.create(["bsky"], ttl_minutes=30)
+        session_id = session.session_id
+
+        fake_response = Response(b'{"ok": true}', status=200, content_type="application/json")
+
+        with patch("server.proxy_server.forward_request", return_value=fake_response):
+            resp = client.get("/proxy/bsky/some.endpoint", headers={"X-Session-Id": session_id})
+
+        assert resp.status_code == 200
+        expires_in = resp.headers.get("X-Proxy-Session-Expires-In")
+        assert expires_in is not None, "X-Proxy-Session-Expires-In header should be present"
+        assert expires_in.isdigit(), f"X-Proxy-Session-Expires-In should be numeric, got: {expires_in!r}"
+        assert int(expires_in) > 0, "X-Proxy-Session-Expires-In should be positive for a fresh session"
+
+    def test_proxy_admin_key_omits_session_expires_in_header(self, client, auth_headers):
+        """Admin key auth does not produce X-Proxy-Session-Expires-In (no associated session)."""
+        from unittest.mock import patch
+
+        from flask import Response
+
+        fake_response = Response(b'{"ok": true}', status=200, content_type="application/json")
+
+        with patch("server.proxy_server.forward_request", return_value=fake_response):
+            resp = client.get("/proxy/bsky/some.endpoint", headers=auth_headers)
+
+        assert resp.status_code == 200
+        assert "X-Proxy-Session-Expires-In" not in resp.headers
