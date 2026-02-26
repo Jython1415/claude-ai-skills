@@ -2,20 +2,21 @@
 
 All notable changes to the Bluesky Access skill will be documented in this file.
 
-## [2.3.0] - 2026-02-26
+## [2.4.0] - 2026-02-26
 
 ### Added
-- `PROXY_AUTH_KEY` environment variable support in `bsky_client`: when `SESSION_ID` is not set, the client falls back to `X-Auth-Key` admin auth using `PROXY_AUTH_KEY`. Session credentials take priority when both are set.
-- Documented `PROXY_AUTH_KEY` fallback in SKILL.md write restrictions section.
+- Documented `PROXY_AUTH_KEY` environment variable: when `SESSION_ID` is not set, `bsky_client` falls back to `X-Auth-Key` admin auth. Session credentials take priority when both are set.
+
+### Fixed
+- Corrected write restrictions documentation: `app.bsky.graph.mute` is not a valid `createRecord` collection NSID. Mute operations (`muteActor`, `unmuteActor`, `muteThread`, `unmuteThread`) are direct-POST endpoints, not `createRecord` operations.
+- Added note that endpoint restrictions apply to all auth methods including admin key access.
+
+## [2.3.0] - 2026-02-26
 
 ### Changed
 - Decouple session setup instructions from SKILL.md: Setup section now uses requirements-only language (Requires SESSION_ID and PROXY_URL; service name: "bsky") instead of imperative create_session procedure
 - sys.path instruction now uses self-referential path derivation instead of a hardcoded placeholder
 - report_skill_issue reference replaced with consumer-agnostic link to the claude-ai-skills repository
-
-### Fixed
-- Corrected write restrictions documentation: `app.bsky.graph.mute` is not a valid `createRecord` collection NSID. Mute operations (`muteActor`, `unmuteActor`, `muteThread`, `unmuteThread`) are direct-POST endpoints, not `createRecord` operations. Updated SKILL.md to make this distinction clear.
-- Added note that endpoint restrictions apply to all auth methods including admin key access.
 
 ## [2.2.0] - 2026-02-24
 
