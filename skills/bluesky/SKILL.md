@@ -24,7 +24,7 @@ if skill_dir not in sys.path:
     sys.path.insert(0, skill_dir)
 ```
 
-Replace `/path/where/you/read/this/SKILL.md` with the actual path you used to read this file.
+Replace `/path/where/you/read/this/SKILL.md` with the actual path you used to read this file (e.g., `/mnt/skills/user/bluesky/SKILL.md`).
 
 Public read operations (profiles, search, feeds, trending) work immediately with no further setup.
 

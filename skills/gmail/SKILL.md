@@ -40,7 +40,7 @@ Multiple Gmail accounts can be configured with custom service names (e.g., `gmai
 os.environ["GMAIL_SERVICE"] = "gmail_work"
 ```
 
-When obtaining credentials for a non-default account, use the custom service name as the service identifier instead of `"gmail"`.
+When obtaining credentials for a non-default account, ensure `SESSION_ID` and `PROXY_URL` correspond to a session that includes the custom service name (e.g., `"gmail_work"`) instead of `"gmail"`.
 
 ## Examples
 
