@@ -34,10 +34,13 @@ Claude.ai
 - `mcp_server.py` - Remote FastMCP server with `create_session`, `revoke_session`, `list_services`, `report_skill_issue`
   - Runs on port 10000 with Streamable HTTP transport via Cloudflare Tunnel
   - Uses GitHub OAuth with username allowlist
-- `local_server.py` - Local stdio MCP server with `service_status`, `service_control`, `service_logs`, `service_setup`, `test_proxy`
-  - Launched by Claude Code via `.mcp.json` — no remote infrastructure needed
+- `local_server.py` - Local stdio MCP server with service management tools (launched by Claude Code via `.mcp.json`):
+  - `service_status` — Check service running state, PID, and recent logs
+  - `service_control` — Start, stop, or restart a service
+  - `service_logs` — Tail recent log output from a service
+  - `service_setup` — Run setup-launchagents.sh to install/restart all services
+  - `test_proxy` — Make authenticated requests to localhost proxy (reads `PROXY_SECRET_KEY` from `.env`)
   - Runs outside sandbox, can call `launchctl` and `localhost` directly
-  - `test_proxy` reads `PROXY_SECRET_KEY` from `.env` for transparent admin auth
 - `services.py` - LaunchAgent service management (discover, start/stop/restart, logs, setup script)
 
 ### Skills (`skills/`)
@@ -77,6 +80,19 @@ requests.get(f"{session['proxy_url']}/proxy/bsky/...", headers=headers)
 
 ### Transparent Proxy (require `X-Session-Id` header)
 - `ANY /proxy/<service>/<path>` - Forward to upstream with credentials
+  - Auth: `X-Session-Id` (session must include the service) OR `X-Auth-Key` (admin — grants all services; service-level endpoint filters still apply)
+
+### Response Headers
+
+The proxy injects the following headers into forwarded responses:
+
+| Header | Present when | Description |
+|--------|-------------|-------------|
+| `X-Proxy-Session-Expires-In` | Session auth only | Minutes remaining before session expiry (rounded up) |
+| `X-RateLimit-Limit` | Always | Request limit per time window (300/minute per session) |
+| `X-RateLimit-Remaining` | Always | Requests remaining in current window |
+| `X-RateLimit-Reset` | Always | Unix timestamp when the rate limit resets |
+| `Retry-After` | On 429 only | Seconds to wait before retrying |
 
 ### Git Operations (require `X-Session-Id`)
 - `POST /git/fetch-bundle` - Clone repo, return bundle
@@ -105,6 +121,13 @@ ISSUE_REPO=Jython1415/claude-ai-skills    # GitHub repo for issue reporting (own
 `PROXY_SECRET_KEY` is required for both servers. The Flask server uses it to
 authenticate admin requests. The MCP server uses it to authorize its calls to
 the Flask API. The setup script validates this key is set before starting services.
+
+**Skill client env vars (for scripts using bsky_client, gmail_client without MCP):**
+```
+PROXY_URL=https://proxy.joshuashew.com  # Or local URL
+PROXY_AUTH_KEY=<PROXY_SECRET_KEY value> # Skips session creation; admin auth fallback
+```
+When both `SESSION_ID`/`PROXY_URL` and `PROXY_AUTH_KEY` are set, session credentials take priority.
 
 **Service Credentials (`server/credentials.json`):**
 ```json
@@ -182,7 +205,7 @@ Managed via `pyproject.toml` and uv:
 - **Service Isolation**: Sessions grant access to specific services only
 - **Transport Security**: Cloudflare Tunnel provides encrypted HTTPS tunnel
 - **Audit Logging**: All session lifecycle events, proxy requests, and git operations logged to `~/Library/Logs/claude-ai-skills-audit.jsonl`
-- **Batch Endpoint Body Validation**: Endpoints that accept multipart batch bodies (e.g., `POST batch/gmail/v1`) must validate embedded sub-requests against the same filters as individual requests. The proxy only inspects the outer HTTP method and path — the body is forwarded as-is. Without body validation, a crafted batch request can embed `POST /messages/send` or `DELETE` operations that bypass endpoint filters. Currently enforced by restricting batch sub-requests to GET-only.
+- **Endpoint Filtering**: Service-specific endpoint filters apply to all proxy requests regardless of auth method (session or admin key). Gmail blocks send, permanent delete, and settings. Bluesky blocks content creation (post, repost, threadgate, generator) and `applyWrites`. Batch endpoint bodies are validated to prevent embedded sub-requests from bypassing filters.
 
 ## Environment Setup
 
