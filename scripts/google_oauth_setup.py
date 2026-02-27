@@ -584,6 +584,21 @@ For multi-account setup, use descriptive names like 'gmail_work' or 'gmail_perso
 """
     )
 
+    # Show existing services for context
+    if creds_file.exists():
+        try:
+            with open(creds_file) as f:
+                existing_creds = json.load(f)
+            if existing_creds:
+                print("Existing services in credentials.json:")
+                for name in existing_creds:
+                    entry = existing_creds[name]
+                    svc_type = "oauth2" if isinstance(entry, dict) and entry.get("refresh_token") else "api-key"
+                    print(f"  - {name} ({svc_type})")
+                print()
+        except (json.JSONDecodeError, Exception):
+            pass
+
     service_name = get_input("Enter service name: ")
 
     # Start OAuth flow
