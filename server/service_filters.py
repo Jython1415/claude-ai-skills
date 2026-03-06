@@ -165,7 +165,7 @@ def validate_gmail_endpoint(method: str, path: str, body: bytes | str | None = N
 # =============================================================================
 
 # ATProto record collections that are blocked for createRecord / putRecord.
-# These are content-creation operations that Placeholder is not permitted to perform.
+# Content-creation operations — blocked by proxy policy.
 _BSKY_BLOCKED_COLLECTIONS = frozenset(
     {
         "app.bsky.feed.post",
