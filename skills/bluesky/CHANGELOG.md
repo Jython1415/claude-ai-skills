@@ -2,6 +2,11 @@
 
 All notable changes to the Bluesky Access skill will be documented in this file.
 
+## [2.5.0] - 2026-03-09
+
+### Added
+- Optional `auth` parameter to `api.get()`: when `auth=True`, forces routing through the proxy with credentials even for public-only endpoints (like `getAuthorFeed`), enabling caller-controlled auth routing to access authenticated viewer data. Falls back to public API gracefully if credentials are unavailable.
+
 ## [2.4.0] - 2026-02-26
 
 ### Added
