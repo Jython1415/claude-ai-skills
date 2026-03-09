@@ -128,7 +128,7 @@ class _API:
         return None, None
 
     @staticmethod
-    def get(endpoint: str, params: dict | None = None) -> dict:
+    def get(endpoint: str, params: dict | None = None, auth: bool = False) -> dict:
         """Make a GET request to a Bluesky XRPC endpoint.
 
         Routes to the public API or credential proxy based on endpoint
@@ -137,6 +137,9 @@ class _API:
         Args:
             endpoint: XRPC endpoint NSID (e.g., "app.bsky.actor.getProfile")
             params: Query parameters
+            auth: If True, route through proxy with credentials even for public-only
+                endpoints (when auth is available). Falls back to public API if no
+                credentials are available.
 
         Returns:
             Parsed JSON response
@@ -148,7 +151,11 @@ class _API:
         category = _classify(endpoint)
         auth_headers, proxy_url = _API._get_auth()
 
-        if category == "public_only":
+        # If auth=True and credentials are available, route through proxy
+        if auth and auth_headers and proxy_url:
+            url = f"{proxy_url}/proxy/bsky/{endpoint}"
+            headers = auth_headers
+        elif category == "public_only":
             url = f"{PUBLIC_API}/{endpoint}"
             headers = {}
         else:  # auth_required
